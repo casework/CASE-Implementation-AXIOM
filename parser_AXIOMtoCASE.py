@@ -13,10 +13,11 @@ import sys
 import timeit
 
 class AXIOMgadget():
-    def __init__(self, xmlReport, jsonCASE, reportType):    
+    def __init__(self, xmlReport, jsonCASE, reportType, baseLocalPath):    
         self.xmlReport = xmlReport
         self.jsonCASE = jsonCASE
         self.reportType = reportType
+        self.baseLocalPath = baseLocalPath + 'Attachments/'
 
     def processXmlReport(self):
 
@@ -26,7 +27,7 @@ class AXIOMgadget():
 
 #---    override the default ContextHandler
 #    
-        Handler = ExtractTraces()
+        Handler = ExtractTraces(self.baseLocalPath)
 
         Handler.createOutFile(self.jsonCASE)
 
@@ -152,14 +153,15 @@ class AXIOMgadget():
 
 class ExtractTraces(xml.sax.ContentHandler):
 
-    def __init__(self):
+    def __init__(self, baseLocalPath):
         self.fOut = ''
         self.lineXML = 0
 
         self.skipLine = False
         self.FILEkind = ['Pictures', 'Videos', 'RTF Documents', 'Excel Documents',\
             "PowerPoint Documents", "Audio", "PDF Documents", "Word Documents", \
-            "WordPerfect Files", "Calc Documents", "Writer Documents", "EML(X) Files"]
+            "WordPerfect Files", "Calc Documents", "Writer Documents"]
+
 
         self.inHit = False
         self.Observable = False
@@ -391,6 +393,7 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.FILEfileNameText = ''
         self.FILEimageText = ''
         self.FILEfileExtensionText = ''
+        self.FILEbaseLocalPath = baseLocalPath
         self.FILEfileSizeText = ''
         self.FILEcreatedText = ''
         self.FILEmodifiedText = ''
@@ -656,7 +659,8 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.FILEinTag = True
         if (attrFragment == 'File Name' or 
             attrFragment == 'Filename' or 
-            attrFragment == " File"):
+            attrFragment == " File" or 
+            attrFragment == "File"):
             self.FILEinFileName = True
         if attrFragment == 'Image':
             self.FILEinImage = True
@@ -774,9 +778,7 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.Observable = True
                 self.skipLine = True
 
-            if  (attrName == 'Pictures' or attrName == 'Videos' or 
-                attrName == 'Audio' or attrName == 'PDF Documents' or 
-                attrName == 'Text Documents' or attrName == 'Word Documents'):
+            if  attrName in self.FILEkind:
                 self.FILEin = True
                 self.Observable = True 
                 self.skipLine = True 
@@ -1209,12 +1211,29 @@ class ExtractTraces(xml.sax.ContentHandler):
 
         if self.FILEinFileName:
             self.FILEfileName[self.FILEtotal - 1] =  self.FILEfileNameText
-            self.FILEfileLocalPath[self.FILEtotal - 1] =  self.FILEfileNameText
+            self.FILEfileNameText = self.FILEfileNameText.replace('\\', '/')
+            last_slash = self.FILEfileNameText.rfind('/')
+            fileName = self.FILEfileNameText
+            
+            if last_slash > -1:
+                fileName  = self.FILEfileNameText[last_slash + 1:]
+
+            
+            self.FILEfileLocalPath[self.FILEtotal - 1] =  self.FILEbaseLocalPath + \
+                fileName
             self.FILEfileNameText = ''
             self.FILEinFileName = False 
 
         if self.FILEinImage:
             self.FILEimage[self.FILEtotal - 1] =  self.FILEimageText
+            self.FILEimageText = self.FILEimageText.replace('\\', '/')
+            last_slash = self.FILEimageText.rfind('/')
+            fileName = ''
+            if last_slash > -1:
+                fileName  = self.FILEimageText[last_slash + 1:]
+
+            self.FILEfileLocalPath[self.FILEtotal - 1] =  self.FILEbaseLocalPath + \
+                fileName
             self.FILEimageText = ''
             self.FILEinImage = False 
 
@@ -1670,7 +1689,12 @@ if __name__ == '__main__':
     print('\n*--- Input paramaters end')
     print('\n\n*** Start processing\n')
 
-    gadget = AXIOMgadget(args.inFileXML, args.outCASE_JSON, args.inTypeEvidence)    
+#---    baseLocalPath is for setting the fileLocalPath property of FileFacet 
+#       Observable. 
+#    
+    baseLocalPath = ''
+
+    gadget = AXIOMgadget(args.inFileXML, args.outCASE_JSON, args.inTypeEvidence, baseLocalPath)    
     
     Handler = gadget.processXmlReport()
     

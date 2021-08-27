@@ -255,15 +255,20 @@ class AXIOMtoJSON:
 		separator = source.find(charSeparator)
 		if separator > - 1:
 			filePath = source[separator:]
-			charSeparator = '/'
 		else:
 			charSeparator = '\\'
 			separator = source.find(charSeparator)
-			filePath = source[separator:]
+			if separator > - 1: 
+				filePath = source[separator:]
+			else:
+				filePath = source
+				fileName = source
+				fileExt = ''
 			
 
-		fileName = filePath.split(charSeparator)[-1]
-		fileExt = fileName[fileName.rfind('.') + 1:]
+		if separator > - 1:
+			fileName = filePath.split(charSeparator)[-1]
+			fileExt = fileName[fileName.rfind('.') + 1:]
 
 		openPar = source.find('(')
 		closePar = source.find(')')
@@ -822,6 +827,7 @@ class AXIOMtoJSON:
 			#line += AXIOMtoJSON.C_TAB*2 +  '"uco-observable:SizeInBytes":"256"\n'
 				AXIOMtoJSON.C_TAB*2 + '}\n'])
 			
+		localPath = FILElocalPath.replace("\\", "/")
 
 		uuid = "kb:" + AXIOMtoJSON.__createUUID()
 		line = "".join(['{ \n', \
@@ -834,10 +840,11 @@ class AXIOMtoJSON:
 			AXIOMtoJSON.C_TAB*2 + '"@type":"uco-observable:FileFacet",\n', \
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:fileName":"' + tail + '",\n', \
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:filePath":"' + path + '",\n', \
-#	CASE 0.2/UCO 0.4 compliant, no 	uco-observable:fileLocalPath property in observable.ttl
-#				
-		#localPath = FILElocalPath.replace("\\", "/")
-		#line += AXIOMtoJSON.C_TAB*2 + '"uco-observable:drafting:fileLocalPath":"' + localPath + '",\n' 		
+
+#--- 	the property fileLocalPath is not included in the UCO observable.TTL
+#			ontology yet
+#			
+			AXIOMtoJSON.C_TAB*2 + '"uco-observable:fileLocalPath":"' + localPath + '",\n', \
 		
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:extension":"' + FILEextension + '",\n', \
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:fileSystemType":"userdata (ExtX)",\n', \
