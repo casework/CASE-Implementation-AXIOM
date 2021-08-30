@@ -1210,17 +1210,18 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.FILEinTag = False
 
         if self.FILEinFileName:
-            self.FILEfileName[self.FILEtotal - 1] =  self.FILEfileNameText
-            self.FILEfileNameText = self.FILEfileNameText.replace('\\', '/')
-            last_slash = self.FILEfileNameText.rfind('/')
-            fileName = self.FILEfileNameText
-            
-            if last_slash > -1:
-                fileName  = self.FILEfileNameText[last_slash + 1:]
+            if self.FILEfileName[self.FILEtotal - 1] == 'EMPTY':
+                self.FILEfileName[self.FILEtotal - 1] =  self.FILEfileNameText
+                self.FILEfileNameText = self.FILEfileNameText.replace('\\', '/')
+                last_slash = self.FILEfileNameText.rfind('/')
+                fileName = self.FILEfileNameText
+                
+                if last_slash > -1:
+                    fileName  = self.FILEfileNameText[last_slash + 1:]
 
-            
-            self.FILEfileLocalPath[self.FILEtotal - 1] =  self.FILEbaseLocalPath + \
-                fileName
+                
+                self.FILEfileLocalPath[self.FILEtotal - 1] =  self.FILEbaseLocalPath + \
+                    fileName
             self.FILEfileNameText = ''
             self.FILEinFileName = False 
 
@@ -1517,9 +1518,11 @@ class ExtractTraces(xml.sax.ContentHandler):
 #        
         if self.DEVICEin:
             if self.DEVICEinSerialNumber:
-                self.DEVICEserialNumberText += ch
+                if self.DEVICEserialNumberText == '':
+                    self.DEVICEserialNumberText += ch
             if self.DEVICEinName:
-                self.DEVICEnameText += ch
+                if self.DEVICEnameText == '':
+                    self.DEVICEnameText += ch
 
 #---    EMAIL processing
 #        
