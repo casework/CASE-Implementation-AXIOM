@@ -160,7 +160,7 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.skipLine = False
         self.FILEkind = ['Pictures', 'Videos', 'RTF Documents', 'Excel Documents',\
             "PowerPoint Documents", "Audio", "PDF Documents", "Word Documents", \
-            "WordPerfect Files", "Calc Documents", "Writer Documents"]
+            "WordPerfect Files", "Calc Documents", "Writer Documents", "Text Documents"]
 
 
         self.inHit = False
@@ -660,6 +660,7 @@ class ExtractTraces(xml.sax.ContentHandler):
         if (attrFragment == 'File Name' or 
             attrFragment == 'Filename' or 
             attrFragment == " File" or 
+            attrFragment == "_Video" or 
             attrFragment == "File"):
             self.FILEinFileName = True
         if attrFragment == 'Image':
