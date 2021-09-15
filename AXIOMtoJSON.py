@@ -829,6 +829,33 @@ class AXIOMtoJSON:
 			
 		localPath = FILElocalPath.replace("\\", "/")
 
+		#---	the xsd:dateTime has the structure YYYY-MM-DDTHH:MM:SS (UTCxxx)
+#			the character "/" is not allowed
+#		
+		FILEtimeC = FILEtimeC.replace("/", "-")
+		FILEtimeC = FILEtimeC.replace(' ', 'T', 1)
+		FILEtimeC = FILEtimeC.replace('UTC', '')
+		
+		if 	FILEtimeC.strip() == '' or FILEtimeC.strip() == 'EMPTY':
+			FILEtimeC = AXIOMtoJSON.C_DATE
+
+		FILEtimeM = FILEtimeM.replace("/", "-")
+		FILEtimeM = FILEtimeM.replace(' ', 'T', 1)
+		FILEtimeM = FILEtimeM.replace('UTC', '')	
+		
+		if 	FILEtimeM.strip() == '' or FILEtimeM.strip() == 'EMPTY':
+			FILEtimeM = AXIOMtoJSON.C_DATE
+
+		FILEtimeA = FILEtimeA.replace("/", "-")	
+		FILEtimeA = FILEtimeA.replace(' ', 'T', 1)
+		FILEtimeA = FILEtimeA.replace('UTC', '')	
+
+		if 	FILEtimeA.strip() == '' or FILEtimeA.strip() == 'EMPTY':
+			FILEtimeA = AXIOMtoJSON.C_DATE
+
+		if FILEsize.strip() == '' or FILEsize.strip() == 'EMPTY':
+			FILEsize = AXIOMtoJSON.C_INT
+
 		uuid = "kb:" + AXIOMtoJSON.__createUUID()
 		line = "".join(['{ \n', \
 			AXIOMtoJSON.C_TAB + '"@id":"' +  uuid + '", \n', \
@@ -1204,7 +1231,7 @@ class AXIOMtoJSON:
 				AXIOMtoJSON.C_TAB*3 + '"@value":"' + cleanOffset + '"\n',\
 				AXIOMtoJSON.C_TAB*2 + '},\n',\
 				AXIOMtoJSON.C_TAB*2 + '"uco-observable:rangeSize": {\n',\
-				AXIOMtoJSON.C_TAB*3 + '"@type":"xsd:long", \n',\
+				AXIOMtoJSON.C_TAB*3 + '"@type":"xsd:integer", \n',\
 				AXIOMtoJSON.C_TAB*3 + '"@value":"0"\n',\
 				AXIOMtoJSON.C_TAB*2 + '}\n',\
 				#AXIOMtoJSON.C_TAB*3 + '"uco-observable:rangeOffsetType":"',\
@@ -1224,10 +1251,7 @@ class AXIOMtoJSON:
 			AXIOMtoJSON.C_TAB + '"uco-core:target":{\n' ,\
 			AXIOMtoJSON.C_TAB*2 + '"@id":"' + target + '"\n',\
 			AXIOMtoJSON.C_TAB + '},\n',\
-			AXIOMtoJSON.C_TAB + '"uco-core:kindOfRelationship":{' + '\n',\
-			AXIOMtoJSON.C_TAB*2 + '"@type": "uco-vocabulary:CyberItemRelationshipVocab",\n',\
-			AXIOMtoJSON.C_TAB*2 + '"@value":"'		+ relation + '"\n',\
-			AXIOMtoJSON.C_TAB + '},\n',\
+			AXIOMtoJSON.C_TAB + '"uco-core:kindOfRelationship":"' + relation + '",\n',\
 			lineTable,\
 			'}'])
 		
@@ -1393,7 +1417,7 @@ class AXIOMtoJSON:
 #
 			uuid = "kb:" + AXIOMtoJSON.__createUUID()
 			
-			if WEB_PAGElastVisited.strip() == '':
+			if WEB_PAGElastVisited.strip() == '' or WEB_PAGElastVisited.strip() == 'EMPTY':
 				WEB_PAGElastVisited = AXIOMtoJSON.C_DATE
 
 			line = '\n{ \n'
