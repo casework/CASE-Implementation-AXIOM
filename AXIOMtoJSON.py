@@ -20,7 +20,7 @@ class AXIOMtoJSON:
 
 # default value for date value not provided
 #
-	C_DATE = '1900-01-01T08:00:00+0'				
+	C_DATE = '1900-01-01T08:00:00'				
 
 # default value for Hash Method value not provided
 #
@@ -168,6 +168,90 @@ class AXIOMtoJSON:
 				chatThread.append(CHATsender[i] + '#' + CHATreceiver[i] + '#' + CHATapplication[i])
 		# print("chatThread:")
 		# print(chatThread)
+
+	def __cleanDate(self, initialDate):
+		aMonths = {
+			'Jan': '01',
+			'Feb': '02',
+			'Mar': '03',
+			'Apr': '04',
+			'May': '05',
+			'Jun': '06',
+			'Jul': '07',
+			'Aug': '08',
+			'Sep': '09',
+			'Oct': '10',
+			'Nov': '11',
+			'Dec': '12'
+		}
+		
+		initialDate = initialDate.strip()
+
+		if 	initialDate == '' or initialDate == 'EMPTY':
+			return AXIOMtoJSON.C_DATE
+
+#---	the xsd:dateTime has the structure YYYY-MM-DDTHH:MM:SS (UTCxxx)
+#		the character "/" is not allowed
+#		
+		#print(f'*DEBUG* before replacing, dateTime: {initialDate}')
+		initialDate = initialDate.replace("/", "-")
+		initialDate = initialDate.replace(' ', 'T', 1)
+		initialDate = initialDate.replace('UTC', '')						
+		initialDate = initialDate.replace('AM', '')
+		initialDate = initialDate.replace('PM', '')
+		startTZ = initialDate.find("+")
+		if startTZ > -1:
+			initialDate = initialDate[:startTZ]		
+		
+		for k,v in aMonths.items():
+			if initialDate.find(k) > -1:
+				initialDate = initialDate.replace(k, v)
+				break
+		
+		firstChars = initialDate[:10]
+		firstChars = firstChars.replace(".", "-")
+		initialDate = firstChars + initialDate[10:]
+
+		yearPattern = '\-[0-9][0-9]T'	# year with two digits
+		resPattern = re.search(yearPattern, initialDate)
+		if resPattern:
+			if re.search('^[0-9]{4}', initialDate):
+				pass
+			else:
+				initialDate = re.sub('-([0-9][0-9])T', '-20\g<1>T', initialDate)
+				initialDate = str(initialDate[6:10]) + initialDate[2:6] + initialDate[0:2] + \
+					initialDate[10:] 
+
+		yearPattern = '\-\d{4}T'	# year with 4 digits in Italian format
+		resPattern = re.search(yearPattern, initialDate)
+		if resPattern:
+			initialDate = str(initialDate[6:10]) + initialDate[2:6] + initialDate[0:2] + \
+				initialDate[10:] 		
+
+		if re.search('(\d{2}:\d{2}:\d{2})$', initialDate):
+			pass
+		else:
+			initialDate = re.sub('(\d{2}:\d{2})$', '\g<1>:00', initialDate)
+
+		if re.search('T(\d):', initialDate):
+			initialDate = re.sub('T(\d):', 'T0\g<1>:', initialDate)
+
+		if re.search(':(\d):', initialDate):
+			initialDate = re.sub(':(\d):', ':0\g<1>:', initialDate)
+
+		if re.search(':(\d)$', initialDate):
+			initialDate = re.sub(':(\d)$', ':0\g<1>', initialDate)
+
+		if re.search('T\d{2}:\d{2}:\d{2}(.+)$', initialDate):
+			initialDate = re.sub('(T\d{2}:\d{2}:\d{2})(.+)$', '\g<1>', initialDate)
+			
+
+		#print(f'*DEBUG* after replacing, dateTime: {initialDate}')
+		
+
+
+		return initialDate.strip()
+
 
 	def ___generateContextAxiom(self, ufedVersion, deviceExtractionStartTime, 
 		deviceAcquisitionStartTime, deviceAcquisitionEndTime, examinerName, 
@@ -658,9 +742,7 @@ class AXIOMtoJSON:
 #---	the xsd:dateTime has the structure YYYY-MM-DDTHH:MM:SS (UTCxxx
 #			the character "/" is not allowed
 #		
-		EMAILtimeStamp = EMAILtimeStamp.replace("/", "-")	
-		EMAILtimeStamp = EMAILtimeStamp.replace(' ', 'T', 1)
-		EMAILtimeStamp = EMAILtimeStamp.replace('UTC', '')	
+		EMAILtimeStamp = self.__cleanDate(EMAILtimeStamp)	
 
 		uuid = "kb:" + AXIOMtoJSON.__createUUID()
 
@@ -788,6 +870,8 @@ class AXIOMtoJSON:
 		FILEHashValue, FILETag, FILEtimeC, FILEtimeM, FILEtimeA, FILElocalPath, 
 		FILEextension):
 		
+		
+
 		head, tail = os.path.split(FILEpath)
 		tail = tail.replace("\\", "/")
 		tail = tail.replace('"', "'")
@@ -803,7 +887,10 @@ class AXIOMtoJSON:
 			FILEhashType = 'MD5';
 
 
-		if  FILEsize.strip == '0':
+		if FILEsize.strip() == 'EMPTY':
+			FILEsize = '0'
+
+		if FILEsize.strip() == '0':
 			sizeFile = AXIOMtoJSON.C_TAB*2 + '}\n'
 		else:
 			sizeFile = "".join([AXIOMtoJSON.C_TAB*2 + '},\n' ,\
@@ -828,33 +915,10 @@ class AXIOMtoJSON:
 				AXIOMtoJSON.C_TAB*2 + '}\n'])
 			
 		localPath = FILElocalPath.replace("\\", "/")
-
-		#---	the xsd:dateTime has the structure YYYY-MM-DDTHH:MM:SS (UTCxxx)
-#			the character "/" is not allowed
-#		
-		FILEtimeC = FILEtimeC.replace("/", "-")
-		FILEtimeC = FILEtimeC.replace(' ', 'T', 1)
-		FILEtimeC = FILEtimeC.replace('UTC', '')
 		
-		if 	FILEtimeC.strip() == '' or FILEtimeC.strip() == 'EMPTY':
-			FILEtimeC = AXIOMtoJSON.C_DATE
-
-		FILEtimeM = FILEtimeM.replace("/", "-")
-		FILEtimeM = FILEtimeM.replace(' ', 'T', 1)
-		FILEtimeM = FILEtimeM.replace('UTC', '')	
-		
-		if 	FILEtimeM.strip() == '' or FILEtimeM.strip() == 'EMPTY':
-			FILEtimeM = AXIOMtoJSON.C_DATE
-
-		FILEtimeA = FILEtimeA.replace("/", "-")	
-		FILEtimeA = FILEtimeA.replace(' ', 'T', 1)
-		FILEtimeA = FILEtimeA.replace('UTC', '')	
-
-		if 	FILEtimeA.strip() == '' or FILEtimeA.strip() == 'EMPTY':
-			FILEtimeA = AXIOMtoJSON.C_DATE
-
-		if FILEsize.strip() == '' or FILEsize.strip() == 'EMPTY':
-			FILEsize = AXIOMtoJSON.C_INT
+		FILEtimeC = self.__cleanDate(FILEtimeC)
+		FILEtimeM = self.__cleanDate(FILEtimeM)
+		FILEtimeA = self.__cleanDate(FILEtimeA)	
 
 		uuid = "kb:" + AXIOMtoJSON.__createUUID()
 		line = "".join(['{ \n', \
@@ -880,17 +944,17 @@ class AXIOMtoJSON:
 			AXIOMtoJSON.C_TAB*2 + '"@type":"xsd:integer", \n',\
 			AXIOMtoJSON.C_TAB*2 + '"@value":"' + FILEsize + '"\n',\
 			AXIOMtoJSON.C_TAB*2 + '},\n',\
-			AXIOMtoJSON.C_TAB*2 + '"uco-observable:createdTime":\n',\
+			AXIOMtoJSON.C_TAB*2 + '"uco-core:objectCreatedTime":\n',\
 			AXIOMtoJSON.C_TAB*3 + '{\n',\
 			AXIOMtoJSON.C_TAB*3 + '"@type":"xsd:dateTime",\n',\
 			AXIOMtoJSON.C_TAB*3 + '"@value":"' + FILEtimeC + '"\n',\
 			AXIOMtoJSON.C_TAB*3 + '},\n',\
-			AXIOMtoJSON.C_TAB*2 + '"uco-observable:modifiedTime":\n',\
+			AXIOMtoJSON.C_TAB*2 + '"uco-core:objectModifiedTime":\n',\
 			AXIOMtoJSON.C_TAB*3 + '{\n',\
 			AXIOMtoJSON.C_TAB*3 + '"@type":"xsd:dateTime",\n',\
 			AXIOMtoJSON.C_TAB*3 + '"@value":"' + FILEtimeM + '"\n',\
 			AXIOMtoJSON.C_TAB*3 + '},\n',\
-			AXIOMtoJSON.C_TAB*2 + '"uco-observable:accessedTime":\n',\
+			AXIOMtoJSON.C_TAB*2 + '"uco-core:objectAccessedTime":\n',\
 			AXIOMtoJSON.C_TAB*3 + '{\n',\
 			AXIOMtoJSON.C_TAB*3 + '"@type":"xsd:dateTime",\n',\
 			AXIOMtoJSON.C_TAB*3 + '"@value":"' + FILEtimeA + '"\n',\
@@ -1417,9 +1481,8 @@ class AXIOMtoJSON:
 #
 			uuid = "kb:" + AXIOMtoJSON.__createUUID()
 			
-			if WEB_PAGElastVisited.strip() == '' or WEB_PAGElastVisited.strip() == 'EMPTY':
-				WEB_PAGElastVisited = AXIOMtoJSON.C_DATE
-
+			WEB_PAGElastVisited = self.__cleanDate(WEB_PAGElastVisited)
+			
 			line = '\n{ \n'
 			line += AXIOMtoJSON.C_TAB + '"@id":"' +  uuid + '", \n'
 			line += AXIOMtoJSON.C_TAB + '"@type":"uco-observable:ObservableObject", \n'
@@ -1448,7 +1511,7 @@ class AXIOMtoJSON:
 			line += AXIOMtoJSON.C_TAB*3 + '"uco-observable:firstVisit":\n'
 			line += AXIOMtoJSON.C_TAB*4 + '{\n'
 			line += AXIOMtoJSON.C_TAB*4 + '"@type":"xsd:dateTime",\n'
-			line += AXIOMtoJSON.C_TAB*4 + '"@value":"1900-01-01T08:00:00+00"\n'
+			line += AXIOMtoJSON.C_TAB*4 + '"@value":"1900-01-01T08:00:00"\n'
 			line += AXIOMtoJSON.C_TAB*4 + '},\n'
 			line += AXIOMtoJSON.C_TAB*3 + '"uco-observable:lastVisit":\n'
 			line += AXIOMtoJSON.C_TAB*4 + '{\n'
@@ -1458,7 +1521,7 @@ class AXIOMtoJSON:
 			line += AXIOMtoJSON.C_TAB*3 + '"uco-observable:expirationTime":\n'
 			line += AXIOMtoJSON.C_TAB*4 + '{\n'
 			line += AXIOMtoJSON.C_TAB*4 + '"@type":"xsd:dateTime",\n'
-			line += AXIOMtoJSON.C_TAB*4 + '"@value":"1900-01-01T08:00:00+00"\n'
+			line += AXIOMtoJSON.C_TAB*4 + '"@value":"1900-01-01T08:00:00"\n'
 			line += AXIOMtoJSON.C_TAB*4 + '},\n'
 			line += AXIOMtoJSON.C_TAB*3 + '"uco-observable:userProfile":"",\n'
 			uuidUrl = self.__generateTraceURL(WEB_PAGEurl)
@@ -1604,11 +1667,15 @@ class AXIOMtoJSON:
 				AXIOMtoJSON.C_TAB*2 + '"uco-tool": "https://unifiedcyberontology.org/ontology/uco/tool#", \n', \
 				AXIOMtoJSON.C_TAB*2 + '"uco-types": "https://unifiedcyberontology.org/ontology/uco/types#", \n', \
 				AXIOMtoJSON.C_TAB*2 + '"uco-vocabulary": "https://unifiedcyberontology.org/ontology/uco/vocabulary#", \n', \
+#---	OLO is a method for representing lists, CASE didn't really need to implement itself, 
+#		implementing ordered lists in an OWL 2 DL compliant  syntax.				
+#				
+				AXIOMtoJSON.C_TAB*2 + '"olo": "http://purl.org/ontology/olo/core#", \n', \
 				AXIOMtoJSON.C_TAB*2 + '"xsd":"http://www.w3.org/2001/XMLSchema#" \n', \
 				AXIOMtoJSON.C_TAB*2 + '},\n', \
 				'"@id": ":bundle-' + uuid + '", \n', \
 				'"@type": "uco-core:Bundle",\n', \
-				'"uco-core:specVersion": "CASE 0.3 - UCO 0.5",\n', \
+				'"uco-core:specVersion": "CASE 0.4 - UCO 0.6",\n', \
 				'"uco-core:description": "Extraction from XML report generated by MAGNET AXIOM PROCESS",\n', \
 				'"uco-core:object": [\n'])
 		self.FileOut.write(line)
