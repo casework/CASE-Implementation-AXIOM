@@ -675,7 +675,7 @@ class AXIOMtoJSON:
 #
 		EMAILtoList = EMAILidentifiersTO.split(',')
 		for i in range(len(EMAILtoList)):
-			if EMAILtoList[i].strip() == '':
+			if EMAILtoList[i].strip() == '' or EMAILtoList[i].strip() == 'EMPTY':
 				pass
 			else:
 				if EMAILtoList[i].strip() in self.EMAILaddressList:
@@ -692,16 +692,17 @@ class AXIOMtoJSON:
 		itemsTO = itemsTO[0:-1]
 
 		itemsCC = ''
-		for i in range(len(EMAILidentifiersCC)):
-			if EMAILidentifiersCC[i].strip() == '':
+		EMAILtoList = EMAILidentifiersCC.split(',')
+		for i in range(len(EMAILtoList)):
+			if EMAILtoList[i].strip() == '' or EMAILtoList[i].strip() == 'EMPTY':
 				pass
 			else:
-				if EMAILidentifiersCC[i].strip() in self.EMAILaddressList:
-					idx = self.EMAILaddressList.index(EMAILidentifiersCC[i].strip())
+				if EMAILtoList[i].strip() in self.EMAILaddressList:
+					idx = self.EMAILaddressList.index(EMAILtoList[i].strip())
 					idCC = '{"@id":"' + self.EMAILaccountIdList[idx] + '"}'
 				else:
-					self.EMAILaddressList.append(EMAILidentifiersCC[i].strip())
-					uuidEmail = self.__generateTraceEmailAccount(EMAILidentifiersCC[i].strip())
+					self.EMAILaddressList.append(EMAILtoList[i].strip())
+					uuidEmail = self.__generateTraceEmailAccount(EMAILtoList[i].strip())
 					self.EMAILaccountIdList.append(uuidEmail)
 					idCC = '{"@id":"' + uuidEmail + '"}'
 				itemsCC += itemsCC + idCC + ','
@@ -713,16 +714,17 @@ class AXIOMtoJSON:
 #		
 		
 		itemsBCC = ''
-		for i in range(len(EMAILidentifiersBCC)):
-			if EMAILidentifiersBCC[i].strip() == '':
+		EMAILtoList = EMAILidentifiersBCC.split(',')
+		for i in range(len(EMAILtoList)):
+			if EMAILtoList[i].strip() == '' or EMAILtoList[i].strip() == 'EMPTY':
 				pass
 			else:
-				if EMAILidentifiersBCC[i].strip() in self.EMAILaddressList:
-					idx = self.EMAILaddressList.index(EMAILidentifiersBCC[i].strip())
+				if EMAILtoList[i].strip() in self.EMAILaddressList:
+					idx = self.EMAILaddressList.index(EMAILtoList[i].strip())
 					idBCC = '{"@id":"' + self.EMAILaccountIdList[idx] + '"}'
 				else:
-					self.EMAILaddressList.append(EMAILidentifiersBCC[i].strip())
-					uuidEmail = self.__generateTraceEmailAccount(EMAILidentifiersBCC[i].strip())
+					self.EMAILaddressList.append(EMAILtoList[i].strip())
+					uuidEmail = self.__generateTraceEmailAccount(EMAILtoList[i].strip())
 					self.EMAILaccountIdList.append(uuidEmail)
 					idBCC = '{"@id":"' + uuidEmail + '"}'
 				itemsBCC += itemsBCC + idBCC + ','
@@ -1477,6 +1479,9 @@ class AXIOMtoJSON:
 				WEB_PAGEtitle, WEB_PAGEvisitCount,  WEB_PAGElastVisited,
 				WEBsource, WEBlocation, WEBrecoveryMethod):
 
+			if WEB_PAGEurl.strip() == '' or WEB_PAGEurl.strip() == 'EMPTY':
+				#print(f'URL empty {WEB_PAGEurl}')
+				return 
 #	CASE 0.4/UCO 0.6 compliant, new URLHistoryFacet class
 #
 			uuid = "kb:" + AXIOMtoJSON.__createUUID()
@@ -1699,14 +1704,17 @@ class AXIOMtoJSON:
 			for i in range(len(FILEid)):			
 				if FILEname[i] == 'EMPTY':
 					FILEname[i] = FILEimage[i]
-					
-				fileExt = FILEname[i][FILEname[i].rfind('.') + 1:]
+				
+				if FILEname[i].find('Binary data') > -1:
+					pass
+				else:
+					fileExt = FILEname[i][FILEname[i].rfind('.') + 1:]
 
-				uuid = self.__generateTraceFile(FILEname[i], FILEsize[i], 
-					'MD5', FILEmd5[i],	FILEtag[i], FILEcreated[i], FILEmodified[i], 
-					FILEaccessed[i], FILElocalPath[i], fileExt)
+					uuid = self.__generateTraceFile(FILEname[i], FILEsize[i], 
+						'MD5', FILEmd5[i],	FILEtag[i], FILEcreated[i], FILEmodified[i], 
+						FILEaccessed[i], FILElocalPath[i], fileExt)
 
-				self.FILEuuid[FILEid[i]] = uuid
+					self.FILEuuid[FILEid[i]] = uuid
 
 	def writeChat(self, CHATid, CHATsender, CHATreceiver, CHATdateTimeSent, 
 							CHATdateTimeReceived, CHATmessage, CHATmessageStatus, 
