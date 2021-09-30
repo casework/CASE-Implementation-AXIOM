@@ -17,7 +17,7 @@ class AXIOMgadget():
         self.xmlReport = xmlReport
         self.jsonCASE = jsonCASE
         self.reportType = reportType
-        self.baseLocalPath = baseLocalPath + 'Attachments/'
+        self.baseLocalPath = os.path.join(baseLocalPath,  'Attachments')
 
     def processXmlReport(self):
 
@@ -1220,9 +1220,7 @@ class ExtractTraces(xml.sax.ContentHandler):
                 if last_slash > -1:
                     fileName  = self.FILEfileNameText[last_slash + 1:]
 
-                
-                self.FILEfileLocalPath[self.FILEtotal - 1] =  self.FILEbaseLocalPath + \
-                    fileName
+                self.FILEfileLocalPath[self.FILEtotal - 1] = os.path.join(self.FILEbaseLocalPath, fileName)
             self.FILEfileNameText = ''
             self.FILEinFileName = False 
 
@@ -1234,8 +1232,7 @@ class ExtractTraces(xml.sax.ContentHandler):
             if last_slash > -1:
                 fileName  = self.FILEimageText[last_slash + 1:]
 
-            self.FILEfileLocalPath[self.FILEtotal - 1] =  self.FILEbaseLocalPath + \
-                fileName
+            self.FILEfileLocalPath[self.FILEtotal - 1] =  os.path.join(self.FILEbaseLocalPath, fileName)
             self.FILEimageText = ''
             self.FILEinImage = False 
 
