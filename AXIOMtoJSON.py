@@ -12,23 +12,23 @@ class AXIOMtoJSON:
 	C_TAB = '\t'
 # default value for string value not provided
 #
-	C_NP = ''  				
+	C_NP = ''				
 
 # default value for integer value not provided
 #
-	C_INT = '0'				
+	C_INT = '0'	
 
 # default value for date value not provided
 #
-	C_DATE = '1900-01-01T08:00:00'				
+	C_DATE = '1900-01-01T08:00:00'
 
 # default value for Hash Method value not provided
 #
-	C_HASH_M = 'MD5' 	
+	C_HASH_M = 'MD5'
 
 # default value for Hash Method value not provided
 #
-	C_HASH_V = '1' * 76 	
+	C_HASH_V = '1' * 76
 
 # default value for the property referrerUrl of the URLHistoryFacet class
 #
@@ -113,7 +113,7 @@ class AXIOMtoJSON:
 	def fillArrayWithEmpty(self, aInput, max):
 		if len(aInput) < max:
 			for i in range(len(aInput), max):						
-				aInput.append('EMPTY')
+				aInput.append('')
 
 	def fillChatThread(self, chatThread, CHATid, CHATsender, CHATreceiver,
 		CHATdateTimeSent, CHATdateTimeReceived, CHATmessage, CHATmessageStatus,
@@ -187,7 +187,7 @@ class AXIOMtoJSON:
 		
 		initialDate = initialDate.strip()
 
-		if 	initialDate == '' or initialDate == 'EMPTY':
+		if 	initialDate == '':
 			return AXIOMtoJSON.C_DATE
 
 #---	the xsd:dateTime has the structure YYYY-MM-DDTHH:MM:SS (UTCxxx)
@@ -282,7 +282,7 @@ class AXIOMtoJSON:
 		idDeviceList = []
 		idDeviceList.append(idDevice)
 		idProvenanceDevice = self.__generateTraceProvencance(idDeviceList, 'Mobile device', 
-			AXIOMtoJSON.C_NP, deviceAcquisitionStartTime) 
+			'', deviceAcquisitionStartTime) 
 		
 		# generate Trace/File for each file extracted by the Acuisition action
 		# idFileList contains the uuid of these files and it is used for
@@ -292,21 +292,19 @@ class AXIOMtoJSON:
 		for i in range(len(imagePath)):
 			if imageMetadataHashSHA[i].strip() == '':
 				idFileAcquisition = self.__generateTraceFile(imagePath[i], 
-				imageSize[i], 'MD5', imageMetadataHashMD5[i], AXIOMtoJSON.C_NP, 
-				AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP,
-				AXIOMtoJSON.C_NP)  				 				
+				imageSize[i], 'MD5', imageMetadataHashMD5[i], '', 
+				'', '', '', '', '', '', '', '', '', '', '', '')  				 				
 			else:
 				idFileAcquisition = self.__generateTraceFile(imagePath[i], 
-				imageSize[i], 'SHA256', imageMetadataHashSHA[i], AXIOMtoJSON.C_NP, 
-				AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP,
-				AXIOMtoJSON.C_NP) 				
+				imageSize[i], 'SHA256', imageMetadataHashSHA[i], '', 
+				'', '', '', '', '', '', '', '', '', '', '', '') 				
 			
 			idFilesAcquisition.append(idFileAcquisition)  	
 		
 
 		idProvenanceAcquisitionFiles = \
 			self.__generateTraceProvencance(idFilesAcquisition, 
-        	'Acquisition files', AXIOMtoJSON.C_NP, deviceAcquisitionStartTime)
+        	'Acquisition files', '', deviceAcquisitionStartTime)
 
 		idProvenanceAcquisitionFilesList = []
 		idProvenanceAcquisitionFilesList.append(idProvenanceAcquisitionFiles)
@@ -314,7 +312,7 @@ class AXIOMtoJSON:
 		idProvencanceAcquisitionAction = \
 		self.__generateTraceInvestigativeAction('acquisition', 
 			'Forensic mobile device acquisition', deviceAcquisitionStartTime, 
-			deviceAcquisitionEndTime, idTool, AXIOMtoJSON.C_NP, 
+			deviceAcquisitionEndTime, idTool, '', 
 			idIdentity, idProvenanceDevice, idProvenanceAcquisitionFilesList, ',');
 
 		idFilesExtraction = []
@@ -323,13 +321,13 @@ class AXIOMtoJSON:
 
 		idProvenanceExtractionFiles = \
 		self.__generateTraceProvencance(idFilesExtraction, 'Extraction',
-			AXIOMtoJSON.C_NP, deviceExtractionStartTime);
+			'', deviceExtractionStartTime);
         
 		idProvenanceExtractionFilesList = []
 		idProvenanceExtractionFilesList.append(idProvenanceExtractionFiles)
 		self.__generateTraceInvestigativeAction('extraction', 
 			'Forensic mobile device extraction', deviceExtractionStartTime,
-			AXIOMtoJSON.C_NP, idTool, AXIOMtoJSON.C_NP, idIdentity,
+			'', idTool, '', idIdentity,
 			idProvenanceAcquisitionFiles, idProvenanceExtractionFilesList, '');
 
 	def __generateChainOfEvidence(self, source, location, uuidTrace):
@@ -563,12 +561,11 @@ class AXIOMtoJSON:
 				# listFileUrls[i] will be stored in the property
 				# path of the FILE trace
 				fileUuid = self.__generateTraceFile(listFileNames[i], 
-				AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP,
-				AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP, listFileUrls[i],
-				AXIOMtoJSON.C_NP)
+				'', '', '', '', '', '', '', listFileUrls[i],
+				'', '', '', '', '', '', '', '')
 				
 				self.__generateTraceRelation(fileUuid, uuid, 'Connected_To', 
-				AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP)
+				'', '')
 		return uuid
 
 
@@ -675,7 +672,7 @@ class AXIOMtoJSON:
 #
 		EMAILtoList = EMAILidentifiersTO.split(',')
 		for i in range(len(EMAILtoList)):
-			if EMAILtoList[i].strip() == '' or EMAILtoList[i].strip() == 'EMPTY':
+			if EMAILtoList[i].strip() == '':
 				pass
 			else:
 				if EMAILtoList[i].strip() in self.EMAILaddressList:
@@ -694,7 +691,7 @@ class AXIOMtoJSON:
 		itemsCC = ''
 		EMAILtoList = EMAILidentifiersCC.split(',')
 		for i in range(len(EMAILtoList)):
-			if EMAILtoList[i].strip() == '' or EMAILtoList[i].strip() == 'EMPTY':
+			if EMAILtoList[i].strip() == '':
 				pass
 			else:
 				if EMAILtoList[i].strip() in self.EMAILaddressList:
@@ -716,7 +713,7 @@ class AXIOMtoJSON:
 		itemsBCC = ''
 		EMAILtoList = EMAILidentifiersBCC.split(',')
 		for i in range(len(EMAILtoList)):
-			if EMAILtoList[i].strip() == '' or EMAILtoList[i].strip() == 'EMPTY':
+			if EMAILtoList[i].strip() == '':
 				pass
 			else:
 				if EMAILtoList[i].strip() in self.EMAILaddressList:
@@ -801,11 +798,9 @@ class AXIOMtoJSON:
 				pass
 			else:
 				fileUuid = self.__generateTraceFile(EMAILattachmentsFilename[i], 
-				AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP,
-  				AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP,
-  				AXIOMtoJSON.C_NP)
+				'', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '')
 				self.__generateTraceRelation(fileUuid, uuid, 'Attached_To', 
-				AXIOMtoJSON.C_NP, AXIOMtoJSON.C_NP)
+				'', '')
 		return uuid
 
 	def __generateTraceEmailAccount(self, address):
@@ -823,7 +818,7 @@ class AXIOMtoJSON:
 #	CASE 0.2/UCO 0.4 compliant, there is no property accountIssuer
 #		
 		#line += AXIOMtoJSON.C_TAB*2 + '"uco-observable:accountIssuer": "' + \
-		#	AXIOMtoJSON.C_NP + '",\n'
+		#	'' + '",\n'
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:isActive":true,\n', \
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:accountIdentifier":" "\n', \
 			AXIOMtoJSON.C_TAB*2 + '},\n', \
@@ -870,7 +865,8 @@ class AXIOMtoJSON:
 
 	def __generateTraceFile(self, FILEpath, FILEsize, FILEhashType, 
 		FILEHashValue, FILETag, FILEtimeC, FILEtimeM, FILEtimeA, FILElocalPath, 
-		FILEextension):
+		FILEextension, FILEexifMake, FILEexifModel, FILEexifLatitudeRef, FILEexifLatitude, 
+        FILEexifLongitudeRef, FILEexifLongitude, FILEexifAltitude):
 		
 		
 
@@ -889,14 +885,12 @@ class AXIOMtoJSON:
 			FILEhashType = 'MD5';
 
 
-		if FILEsize.strip() == 'EMPTY':
+		if FILEsize.strip() == '':
 			FILEsize = '0'
 
-		if FILEsize.strip() == '0':
-			sizeFile = AXIOMtoJSON.C_TAB*2 + '}\n'
-		else:
-			sizeFile = "".join([AXIOMtoJSON.C_TAB*2 + '},\n' ,\
-				AXIOMtoJSON.C_TAB*2 + '{\n',\
+		sizeFile = ''
+		if FILEsize.strip() != '0':
+			sizeFile = "".join([',' + AXIOMtoJSON.C_TAB + '{\n' ,\
 				AXIOMtoJSON.C_TAB*2 + '"@type":"uco-observable:ContentDataFacet",\n',\
 				AXIOMtoJSON.C_TAB*2 + '"uco-observable:hash":[\n',\
 				AXIOMtoJSON.C_TAB*3 + '{\n',\
@@ -914,13 +908,61 @@ class AXIOMtoJSON:
 				AXIOMtoJSON.C_TAB*3 + '}\n',\
 				AXIOMtoJSON.C_TAB*2 + '] \n',\
 			#line += AXIOMtoJSON.C_TAB*2 +  '"uco-observable:SizeInBytes":"256"\n'
-				AXIOMtoJSON.C_TAB*2 + '}\n'])
+				AXIOMtoJSON.C_TAB + '}\n'])
 			
 		localPath = FILElocalPath.replace("\\", "/")
 		
 		FILEtimeC = self.__cleanDate(FILEtimeC)
 		FILEtimeM = self.__cleanDate(FILEtimeM)
 		FILEtimeA = self.__cleanDate(FILEtimeA)	
+		line_exif = ''
+		if FILEexifLatitude.strip() != '':
+			FILEexifLatitude = FILEexifLatitude.strip('" ')
+			FILEexifLongitude = FILEexifLongitude.strip('" ')
+			FILEexifAltitude = FILEexifAltitude.strip('" ')
+			line_exif = "".join([',' + AXIOMtoJSON.C_TAB + '{\n' ,\
+				AXIOMtoJSON.C_TAB*2 + '"@type":"uco-observable:EXIFFacet",\n',\
+				AXIOMtoJSON.C_TAB*2 + '"uco-observable:exifData": {\n',\
+				AXIOMtoJSON.C_TAB*3 + '"@type": "uco-types:ControlledDictionary",\n',\
+				AXIOMtoJSON.C_TAB*3 + ' "uco-types:entry": [\n',\
+				AXIOMtoJSON.C_TAB*4 + '{\n',\
+				AXIOMtoJSON.C_TAB*5 + '"@type": "uco-types:ControlledDictionaryEntry",\n',\
+				AXIOMtoJSON.C_TAB*5 + '"uco-types:key": "Make",\n',\
+				AXIOMtoJSON.C_TAB*5 + '"uco-types:value": "' + FILEexifMake + '"\n',\
+				AXIOMtoJSON.C_TAB*4 + '},\n',\
+				AXIOMtoJSON.C_TAB*4 + '{\n',\
+				AXIOMtoJSON.C_TAB*5 + '"@type": "uco-types:ControlledDictionaryEntry",\n',\
+				AXIOMtoJSON.C_TAB*5 + '"uco-types:key": "Model",\n',\
+				AXIOMtoJSON.C_TAB*5 + '"uco-types:value": "' + FILEexifModel + '"\n',\
+				AXIOMtoJSON.C_TAB*4 + '},\n',\
+				AXIOMtoJSON.C_TAB*4 + '{\n',\
+				AXIOMtoJSON.C_TAB*5 + '"@type": "uco-types:ControlledDictionaryEntry",\n',\
+				AXIOMtoJSON.C_TAB*5 + '"uco-types:key": "LatitudeRef",\n',\
+				AXIOMtoJSON.C_TAB*5 + '"uco-types:value": "' + FILEexifLatitudeRef + '"\n',\
+				AXIOMtoJSON.C_TAB*4 + '},\n',\
+				AXIOMtoJSON.C_TAB*4 + '{\n',\
+				AXIOMtoJSON.C_TAB*5 + '"@type": "uco-types:ControlledDictionaryEntry",\n',\
+				AXIOMtoJSON.C_TAB*5 + '"uco-types:key": "Latitude",\n',\
+				AXIOMtoJSON.C_TAB*5 + '"uco-types:value": "' + FILEexifLatitude + '"\n',\
+				AXIOMtoJSON.C_TAB*4 + '},\n',\
+				AXIOMtoJSON.C_TAB*4 + '{\n',\
+				AXIOMtoJSON.C_TAB*5 + '"@type": "uco-types:ControlledDictionaryEntry",\n',\
+				AXIOMtoJSON.C_TAB*5 + '"uco-types:key": "LongitudeRef",\n',\
+				AXIOMtoJSON.C_TAB*5 + '"uco-types:value": "' + FILEexifLongitudeRef + '"\n',\
+				AXIOMtoJSON.C_TAB*4 + '},\n',\
+				AXIOMtoJSON.C_TAB*4 + '{\n',\
+				AXIOMtoJSON.C_TAB*5 + '"@type": "uco-types:ControlledDictionaryEntry",\n',\
+				AXIOMtoJSON.C_TAB*5 + '"uco-types:key": "Longitude",\n',\
+				AXIOMtoJSON.C_TAB*5 + '"uco-types:value": "' + FILEexifLongitude + '"\n',\
+				AXIOMtoJSON.C_TAB*4 + '},\n',\
+				AXIOMtoJSON.C_TAB*4 + '{\n',\
+				AXIOMtoJSON.C_TAB*5 + '"@type": "uco-types:ControlledDictionaryEntry",\n',\
+				AXIOMtoJSON.C_TAB*5 + '"uco-types:key": "Altitude",\n',\
+				AXIOMtoJSON.C_TAB*5 + '"uco-types:value": "' + FILEexifAltitude + '"\n',\
+				AXIOMtoJSON.C_TAB*4 + '}\n',\
+				AXIOMtoJSON.C_TAB*3 + ']\n',\
+				AXIOMtoJSON.C_TAB*2 + '}\n',\
+				AXIOMtoJSON.C_TAB + '}\n'])
 
 		uuid = "kb:" + AXIOMtoJSON.__createUUID()
 		line = "".join(['{ \n', \
@@ -929,7 +971,7 @@ class AXIOMtoJSON:
 			AXIOMtoJSON.C_TAB + '"uco-observable:hasChanged":true,\n',\
 			AXIOMtoJSON.C_TAB + '"uco-core:tag":["' + FILETag + '"],\n'	, \
 			AXIOMtoJSON.C_TAB + '"uco-core:hasFacet":[\n', \
-			AXIOMtoJSON.C_TAB*2 + '{\n', \
+			AXIOMtoJSON.C_TAB + '{\n', \
 			AXIOMtoJSON.C_TAB*2 + '"@type":"uco-observable:FileFacet",\n', \
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:fileName":"' + tail + '",\n', \
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:filePath":"' + path + '",\n', \
@@ -943,25 +985,27 @@ class AXIOMtoJSON:
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:fileSystemType":"userdata (ExtX)",\n', \
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:isDirectory":false,\n', \
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:sizeInBytes": {\n',\
-			AXIOMtoJSON.C_TAB*2 + '"@type":"xsd:integer", \n',\
-			AXIOMtoJSON.C_TAB*2 + '"@value":"' + FILEsize + '"\n',\
+			AXIOMtoJSON.C_TAB*3 + '"@type":"xsd:integer", \n',\
+			AXIOMtoJSON.C_TAB*3 + '"@value":"' + FILEsize + '"\n',\
 			AXIOMtoJSON.C_TAB*2 + '},\n',\
 			AXIOMtoJSON.C_TAB*2 + '"uco-core:objectCreatedTime":\n',\
-			AXIOMtoJSON.C_TAB*3 + '{\n',\
+			AXIOMtoJSON.C_TAB*2 + '{\n',\
 			AXIOMtoJSON.C_TAB*3 + '"@type":"xsd:dateTime",\n',\
 			AXIOMtoJSON.C_TAB*3 + '"@value":"' + FILEtimeC + '"\n',\
-			AXIOMtoJSON.C_TAB*3 + '},\n',\
+			AXIOMtoJSON.C_TAB*2 + '},\n',\
 			AXIOMtoJSON.C_TAB*2 + '"uco-core:objectModifiedTime":\n',\
-			AXIOMtoJSON.C_TAB*3 + '{\n',\
+			AXIOMtoJSON.C_TAB*2 + '{\n',\
 			AXIOMtoJSON.C_TAB*3 + '"@type":"xsd:dateTime",\n',\
 			AXIOMtoJSON.C_TAB*3 + '"@value":"' + FILEtimeM + '"\n',\
-			AXIOMtoJSON.C_TAB*3 + '},\n',\
+			AXIOMtoJSON.C_TAB*2 + '},\n',\
 			AXIOMtoJSON.C_TAB*2 + '"uco-core:objectAccessedTime":\n',\
-			AXIOMtoJSON.C_TAB*3 + '{\n',\
+			AXIOMtoJSON.C_TAB*2 + '{\n',\
 			AXIOMtoJSON.C_TAB*3 + '"@type":"xsd:dateTime",\n',\
 			AXIOMtoJSON.C_TAB*3 + '"@value":"' + FILEtimeA + '"\n',\
-			AXIOMtoJSON.C_TAB*3 + '}\n',\
 			AXIOMtoJSON.C_TAB*2 + '}\n',\
+			AXIOMtoJSON.C_TAB + '}\n',\
+			sizeFile , \
+			line_exif , \
 			AXIOMtoJSON.C_TAB + ']\n',\
 			'}'])
 		
@@ -1479,8 +1523,7 @@ class AXIOMtoJSON:
 				WEB_PAGEtitle, WEB_PAGEvisitCount,  WEB_PAGElastVisited,
 				WEBsource, WEBlocation, WEBrecoveryMethod):
 
-			if WEB_PAGEurl.strip() == '' or WEB_PAGEurl.strip() == 'EMPTY':
-				#print(f'URL empty {WEB_PAGEurl}')
+			if WEB_PAGEurl.strip() == '':				
 				return 
 #	CASE 0.4/UCO 0.6 compliant, new URLHistoryFacet class
 #
@@ -1534,10 +1577,12 @@ class AXIOMtoJSON:
 			line += AXIOMtoJSON.C_TAB*4 + '"@id":"' + uuidUrl + '"\n'
 			line += AXIOMtoJSON.C_TAB*3 + '},\n'
 			
-			uuidUrl = self.__generateTraceURL(AXIOMtoJSON.C_REF_URL)
-			line += AXIOMtoJSON.C_TAB*3 + '"uco-observable:referrerUrl":{\n'			
-			line += AXIOMtoJSON.C_TAB*4 + '"@id":"' + uuidUrl + '"\n'
-			line += AXIOMtoJSON.C_TAB*3 + '},\n'
+#---	the AXIOM report doesn't contain this information, so it will be ignored
+#			
+			#uuidUrl = self.__generateTraceURL(AXIOMtoJSON.C_REF_URL)
+			#line += AXIOMtoJSON.C_TAB*3 + '"uco-observable:referrerUrl":{\n'			
+			#line += AXIOMtoJSON.C_TAB*4 + '"@id":"' + uuidUrl + '"\n'
+			#line += AXIOMtoJSON.C_TAB*3 + '},\n'
 			line += AXIOMtoJSON.C_TAB*3 + '"uco-observable:pageTitle":"' 
 			title = WEB_PAGEtitle.replace('"', '')
 			line += title + '",\n'
@@ -1641,7 +1686,7 @@ class AXIOMtoJSON:
 	def ObservableRelationship(self, CONTACTname, CONTACTphoneNum,
 				CONTACTsource, CONTACTlocation, CONTACTrecoveryMethod):
 		for i in range(len(CONTACTname)):
-			if CONTACTphoneNum[i] == 'EMPTY':
+			if CONTACTphoneNum[i] == '':
 				continue
 			else:
 				phoneNum = CONTACTphoneNum[i].replace('+', '00')
@@ -1699,10 +1744,12 @@ class AXIOMtoJSON:
 
 	def writeFiles(self, FILEid, FILEtag, FILEname, FILElocalPath, FILEimage,
 					FILEsize, FILEcreated, FILEmodified, FILEaccessed, FILEmd5,
+					FILEexifMake, FILEexifModel, FILEexifLatitudeRef, FILEexifLatitude, 
+                	FILEexifLongitudeRef, FILEexifLongitude, FILEexifAltitude,
 					FILEsource, FILElocation, FILErecoveryMethod):
 			
 			for i in range(len(FILEid)):			
-				if FILEname[i] == 'EMPTY':
+				if FILEname[i] == '':
 					FILEname[i] = FILEimage[i]
 				
 				if FILEname[i].find('Binary data') > -1:
@@ -1712,7 +1759,10 @@ class AXIOMtoJSON:
 
 					uuid = self.__generateTraceFile(FILEname[i], FILEsize[i], 
 						'MD5', FILEmd5[i],	FILEtag[i], FILEcreated[i], FILEmodified[i], 
-						FILEaccessed[i], FILElocalPath[i], fileExt)
+						FILEaccessed[i], FILElocalPath[i], fileExt,
+						FILEexifMake[i], FILEexifModel[i], FILEexifLatitudeRef[i], 
+						FILEexifLatitude[i], FILEexifLongitudeRef[i], 
+						FILEexifLongitude[i], FILEexifAltitude[i])
 
 					self.FILEuuid[FILEid[i]] = uuid
 
@@ -1886,7 +1936,7 @@ class AXIOMtoJSON:
 			body = body.replace("\\", "")
 			#body = '?'.join(hex(ord(x))[2:] for x in body)
 
-			if SMSreceivedDateTime[i] == 'EMPTY':
+			if SMSreceivedDateTime[i] == '':
 				phoneUuidFrom = phoneParticipantUuid
 				phoneUuidTo = '{"@id":"' + phoneRecipientUuid + '"}'	
 				SMSdate = SMSsentDateTime[i]

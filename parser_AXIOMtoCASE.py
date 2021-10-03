@@ -2,7 +2,7 @@
 #	xml_sax_UFED_to_CASE: UFED  SAX parser from XML report to CASE-JSON-LD 
 #
 
-import xml.sax 
+import xml.sax
 import string
 import argparse
 import os
@@ -64,7 +64,10 @@ class AXIOMgadget():
         caseTrace.writeFiles(Handler.FILEid, Handler.FILEtag, Handler.FILEfileName,
                 Handler.FILEfileLocalPath, Handler.FILEimage, Handler.FILEfileSize,
                 Handler.FILEcreated, Handler.FILEmodified, Handler.FILEaccessed, 
-                Handler.FILEmd5, Handler.FILEsource, Handler.FILElocation, 
+                Handler.FILEmd5, Handler.FILEexifMake, Handler.FILEexifModel,
+                Handler.FILEexifLatitudeRef, Handler.FILEexifLatitude, 
+                Handler.FILEexifLongitudeRef, Handler.FILEexifLongitude, Handler.FILEexifAltitude,
+                Handler.FILEsource, Handler.FILElocation, 
                 Handler.FILErecoveryMethod)
 
 
@@ -124,24 +127,6 @@ class AXIOMgadget():
 #
         caseTrace.generateTraceDevice('', Handler.DEVICEserialNumberText,  
             Handler.DEVICEnameText, '', '', '', '', '', '', '', '')
-
-# Handler.CONTEXTimagePath = ['blk0_sda.bin', 'blk16_sdb.bin', 
-#     'blk32_sdc.bin', 'procdata.zip']
-# Handler.CONTEXTimageSize = ['31989956608', '4194304', 
-#     '4194304', '1429913']    
-# Handler.CONTEXTimageMetadataHashSHA.append('62765111E7195CE75C6CB255CD03AD3433D35ACFF31AF89CCBF07CE34CE1E17E')
-# Handler.CONTEXTimageMetadataHashSHA.append('005A783BAC24E3782DE8C16C2933CD9FF95EE0E4EFF3EE7C0BA4253636301127')
-# Handler.CONTEXTimageMetadataHashSHA.append('1301CA17CF7DE7DA7B52AE178C1DBBFED8FA4BCC97F081C6FB29C981EF43FD0B')
-# Handler.CONTEXTimageMetadataHashSHA.append('894CF1D6ED65909104A519031CDF685E8445EE367D2887D491E03FEA875FE13A')
-# Handler.CONTEXTimageMetadataHashMD5 = ['0', '0', '0', '0']
-
-# caseTrace.writeContextAxiom('4.0.1.19617', 
-#    '2020-06-01T11:00:00+0', '2020-06-01T08:00:00+0',
-#    '2020-06-01T10:15:00+0', 'Fabrizio',
-#    '00:56:78:99:AC', 'AC78234', 'Samsung SM-DX-80', 'Android', 
-#    '5.1', 'Samsung', '00:78:E4:90:1C', '12356707079', '6907072103', 
-#    '7869664323912760', Handler.CONTEXTimagePath, Handler.CONTEXTimageSize, 
-#    Handler.CONTEXTimageMetadataHashSHA, Handler.CONTEXTimageMetadataHashMD5)
 
 # this write a single line to complete the JSON output file
 
@@ -383,6 +368,13 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.FILEinModified = False
         self.FILEinAccessed = False
         self.FILEinMD5 = False
+        self.FILEinExifLatitudeRef = False
+        self.FILEinExifLatitude = False
+        self.FILEinExifLongitudeRef = False
+        self.FILEinExifLongitude = False
+        self.FILEinExifAltitude = False
+        self.FILEinExifMake = False
+        self.FILEinExifModel = False
         self.FILEinSource = False
         self.FILEinLocation = False
         self.FILEinRecoveryMethod = False
@@ -399,6 +391,13 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.FILEmodifiedText = ''
         self.FILEaccessedText = ''
         self.FILEmd5Text = ''
+        self.FILEexifMakeText = ''
+        self.FILEexifModelText = ''
+        self.FILEexifLatitudeRefText = ''
+        self.FILEexifLatitudeText = ''
+        self.FILEexifLongitudeRefText = ''
+        self.FILEexifLongitudeText = ''
+        self.FILEexifAltitudeText = ''
         self.FILEsourceText = ''
         self.FILElocationText = ''
         self.FILErecoveryMethodText = ''
@@ -414,6 +413,13 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.FILEmodified = []
         self.FILEaccessed = []
         self.FILEmd5 = []
+        self.FILEexifMake = []
+        self.FILEexifModel = []
+        self.FILEexifLatitudeRef = []
+        self.FILEexifLatitude = []
+        self.FILEexifLongitudeRef = []
+        self.FILEexifLongitude = []
+        self.FILEexifAltitude = []
         self.FILEsource = []
         self.FILElocation = []
         self.FILErecoveryMethod = []
@@ -678,6 +684,20 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.FILEinAccessed = True
         if attrFragment == 'MD5 Hash':
             self.FILEinMD5 = True
+        if attrFragment == 'Make':
+            self.FILEinExifMake = True
+        if attrFragment == 'Model':
+            self.FILEinExifModel = True
+        if attrFragment == 'GPS Latitude':
+            self.FILEinExifLatitude = True
+        if attrFragment == 'GPS Latitude Reference':
+            self.FILEinExifLatitudeRef = True
+        if attrFragment == 'GPS Longitude':
+            self.FILEinExifLongitude = True
+        if attrFragment == 'GPS Longitude Reference':
+            self.FILEinExifLongitudeRef = True
+        if attrFragment == 'Altitude (meters)':
+            self.FILEinExifAltitude = True
         if attrFragment == 'Source':
             self.FILEinSource = True
         if attrFragment == 'Location':
@@ -833,13 +853,13 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.printObservable('CALL', self.CALLtotal)
                 self.CALLid.append(str(self.CALLtotal))
                 self.CALLappName.append(self.CALLappNameText)
-                self.CALLpartner.append('EMPTY')
-                self.CALLdirection.append('EMPTY')
-                self.CALLtimeStamp.append('EMPTY')
-                self.CALLduration.append('EMPTY')
-                self.CALLsource.append('EMPTY')
-                self.CALLlocation.append('EMPTY')
-                self.CALLrecoveryMethod.append('EMPTY')
+                self.CALLpartner.append('')
+                self.CALLdirection.append('')
+                self.CALLtimeStamp.append('')
+                self.CALLduration.append('')
+                self.CALLsource.append('')
+                self.CALLlocation.append('')
+                self.CALLrecoveryMethod.append('')
 
             if self.DEVICEin:
                 self.DEVICEnameText= ''
@@ -866,11 +886,11 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.CONTACTtotal += 1
                 self.printObservable('CONTACT', self.CONTACTtotal)
                 self.CONTACTid.append(str(self.CONTACTtotal))
-                self.CONTACTname.append('EMPTY')
-                self.CONTACTphoneNumber.append('EMPTY')
-                self.CONTACTsource.append('EMPTY')
-                self.CONTACTlocation.append('EMPTY')
-                self.CONTACTrecoveryMethod.append('EMPTY')
+                self.CONTACTname.append('')
+                self.CONTACTphoneNumber.append('')
+                self.CONTACTsource.append('')
+                self.CONTACTlocation.append('')
+                self.CONTACTrecoveryMethod.append('')
 
 
             if self.EMAILin:
@@ -878,62 +898,69 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.printObservable('EMAIL', self.EMAILtotal)
                 self.EMAILid.append(str(self.EMAILtotal))
                 self.EMAILappSource.append(self.EMAILappName)
-                self.EMAILsender.append('EMPTY')
-                self.EMAILrecipient.append('EMPTY')
-                self.EMAILcc.append('EMPTY')
-                self.EMAILbcc.append('EMPTY')
-                self.EMAILdateTime.append('EMPTY')
-                self.EMAILsubject.append('EMPTY')
-                self.EMAILbody.append('EMPTY')
-                self.EMAILattachment.append('EMPTY')
-                self.EMAILsource.append('EMPTY')
-                self.EMAILlocation.append('EMPTY')
-                self.EMAILrecoveryMethod.append('EMPTY')
+                self.EMAILsender.append('')
+                self.EMAILrecipient.append('')
+                self.EMAILcc.append('')
+                self.EMAILbcc.append('')
+                self.EMAILdateTime.append('')
+                self.EMAILsubject.append('')
+                self.EMAILbody.append('')
+                self.EMAILattachment.append('')
+                self.EMAILsource.append('')
+                self.EMAILlocation.append('')
+                self.EMAILrecoveryMethod.append('')
 
             if self.FILEin:
                 self.FILEtotal += 1
                 self.printObservable('FILE', self.FILEtotal)
                 self.FILEid.append(str(self.FILEtotal))
                 self.FILEtag.append(self.FILEtagText)
-                self.FILEfileName.append('EMPTY')
-                self.FILEfileLocalPath.append('EMPTY')
-                self.FILEimage.append('EMPTY')
-                self.FILEfileExtension.append('EMPTY')
-                self.FILEfileSize.append('EMPTY')
-                self.FILEcreated.append('EMPTY')
-                self.FILEmodified.append('EMPTY')
-                self.FILEaccessed.append('EMPTY')
-                self.FILEmd5.append('EMPTY')
-                self.FILEsource.append('EMPTY')
-                self.FILElocation.append('EMPTY')
-                self.FILErecoveryMethod.append('EMPTY')
+                self.FILEfileName.append('')
+                self.FILEfileLocalPath.append('')
+                self.FILEimage.append('')
+                self.FILEfileExtension.append('')
+                self.FILEfileSize.append('')
+                self.FILEcreated.append('')
+                self.FILEmodified.append('')
+                self.FILEaccessed.append('')
+                self.FILEmd5.append('')
+                self.FILEexifMake.append('')
+                self.FILEexifModel.append('')
+                self.FILEexifLatitudeRef.append('')
+                self.FILEexifLatitude.append('')
+                self.FILEexifLongitude.append('')
+                self.FILEexifLongitudeRef.append('')
+                self.FILEexifAltitude.append('')
+                self.FILEsource.append('')
+                self.FILElocation.append('')
+                self.FILErecoveryMethod.append('')
 
             if self.SMSin:
                 self.SMStotal += 1
                 self.printObservable('SMS', self.SMStotal)
                 self.SMSid.append(str(self.SMStotal))
-                self.SMSsender.append('EMPTY')
-                self.SMSrecipient.append('EMPTY')
-                self.SMSreceivedDateTime.append('EMPTY')
-                self.SMSsentDateTime.append('EMPTY')
-                self.SMSmessage.append('EMPTY')
-                self.SMSdirection.append('EMPTY')
-                self.SMSsource.append('EMPTY')
-                self.SMSlocation.append('EMPTY')
-                self.SMSrecoveryMethod.append('EMPTY') 
+                self.SMSsender.append('')
+                self.SMSrecipient.append('')
+                self.SMSreceivedDateTime.append('')
+                self.SMSsentDateTime.append('')
+                self.SMSmessage.append('')
+                self.SMSdirection.append('')
+                self.SMSsource.append('')
+                self.SMSlocation.append('')
+                self.SMSrecoveryMethod.append('') 
 
             if self.WEBin:
                 self.WEBtotal += 1
                 self.printObservable('WEB', self.WEBtotal)
                 self.WEBid.append(str(self.WEBtotal))
-                self.WEBurl.append('EMPTY')
-                self.WEBlastVisited.append('EMPTY')
-                self.WEBtitle.append('EMPTY')
+                self.WEBurl.append('')
+                self.WEBlastVisited.append('')
+                self.WEBtitle.append('')
                 self.WEBvisitCount.append('')
                 self.WEBappSource.append(self.WEBappName)
-                self.WEBsource.append('EMPTY')
-                self.WEBlocation.append('EMPTY')
-                self.WEBrecoveryMethod.append('EMPTY')                
+                self.WEBsource.append('')
+                self.WEBlocation.append('')
+                self.WEBrecoveryMethod.append('')                
 
         if elementName == 'Fragment':
             attrName = attrs.get('name')        
@@ -1211,7 +1238,7 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.FILEinTag = False
 
         if self.FILEinFileName:
-            if self.FILEfileName[self.FILEtotal - 1] == 'EMPTY':
+            if self.FILEfileName[self.FILEtotal - 1] == '':
                 self.FILEfileName[self.FILEtotal - 1] =  self.FILEfileNameText
                 self.FILEfileNameText = self.FILEfileNameText.replace('\\', '/')
                 last_slash = self.FILEfileNameText.rfind('/')
@@ -1265,6 +1292,41 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.FILEmd5[self.FILEtotal - 1] =  self.FILEmd5Text
             self.FILEmd5Text = ''
             self.FILEinMD5 = False 
+
+        if self.FILEinExifMake:
+            self.FILEexifMake[self.FILEtotal - 1] =  self.FILEexifMakeText
+            self.FILEexifMakeText = ''
+            self.FILEinExifMake = False 
+
+        if self.FILEinExifModel:
+            self.FILEexifModel[self.FILEtotal - 1] =  self.FILEexifModelText
+            self.FILEexifModelText = ''
+            self.FILEinExifModel = False 
+
+        if self.FILEinExifLatitude:
+            self.FILEexifLatitude[self.FILEtotal - 1] =  self.FILEexifLatitudeText
+            self.FILEexifLatitudeText = ''
+            self.FILEinExifLatitude = False
+
+        if self.FILEinExifLatitudeRef:
+            self.FILEexifLatitudeRef[self.FILEtotal - 1] =  self.FILEexifLatitudeRefText
+            self.FILEexifLatitudeRefText = ''
+            self.FILEinExifLatitudeRef = False
+
+        if self.FILEinExifLongitude:
+            self.FILEexifLongitude[self.FILEtotal - 1] =  self.FILEexifLongitudeText
+            self.FILEexifLongitudeText = ''
+            self.FILEinExifLongitude = False
+
+        if self.FILEinExifLongitudeRef:
+            self.FILEexifLongitudeRef[self.FILEtotal - 1] =  self.FILEexifLongitudeRefText
+            self.FILEexifLongitudeRefText = ''
+            self.FILEinExifLongitudeRef = False
+
+        if self.FILEinExifAltitude:
+            self.FILEexifAltitude[self.FILEtotal - 1] =  self.FILEexifAltitudeText
+            self.FILEexifAltitudeText = ''
+            self.FILEinExifAltitude = False
 
         if self.FILEinSource:
             self.FILEsource[self.FILEtotal - 1] =  self.FILEsourceText
@@ -1342,7 +1404,7 @@ class ExtractTraces(xml.sax.ContentHandler):
 #                
                 if self.SMSdirectionText.lower() == 'incoming':
                     self.SMSreceivedDateTime[self.SMStotal - 1] = self.SMSsentDateTimeText
-                    self.SMSsentDateTime[self.SMStotal - 1] = 'EMPTY'
+                    self.SMSsentDateTime[self.SMStotal - 1] = ''
                     self.SMSrecipient[self.SMStotal - 1] = 'Local user'
                 else:
                     self.SMSsender[self.SMStotal - 1] = 'Local user'
@@ -1553,37 +1615,40 @@ class ExtractTraces(xml.sax.ContentHandler):
         if self.FILEin:
             if self.FILEinTag:
                 self.FILEtagText += ch
-
             if self.FILEinFileName:
                 self.FILEfileNameText += ch
-
             if self.FILEinImage:
                 self.FILEimageText += ch
-
             if self.FILEinFileExtension:
                 self.FILEfileExtensionText += ch
-
             if self.FILEinFileSize:
                 self.FILEfileSizeText += ch
-
             if self.FILEinCreated:
                 self.FILEcreatedText += ch
-
             if self.FILEinModified:
                 self.FILEmodifiedText += ch
-
             if self.FILEinAccessed:
                 self.FILEaccessedText += ch
-
             if self.FILEinMD5:
                 self.FILEmd5Text += ch
-
+            if self.FILEinExifMake:
+                self.FILEexifMakeText += ch
+            if self.FILEinExifModel:
+                self.FILEexifModelText += ch 
+            if self.FILEinExifLatitudeRef:
+                self.FILEexifLatitudeRefText += ch
+            if self.FILEinExifLatitude:
+                self.FILEexifLatitudeText += ch
+            if self.FILEinExifLongitudeRef:
+                self.FILEexifLongitudeRef += ch
+            if self.FILEinExifLongitude:
+                self.FILEexifLongitudeText += ch
+            if self.FILEinExifAltitude:
+                self.FILEexifAltitudeText += ch
             if self.FILEinSource:
                 self.FILEsourceText += ch
-
             if self.FILEinLocation:
                 self.FILElocationText += ch
-
             if self.FILEinRecoveryMethod:
                 self.FILErecoveryMethodText += ch
 
