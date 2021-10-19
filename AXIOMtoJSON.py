@@ -1081,18 +1081,21 @@ class AXIOMtoJSON:
 		return uuid
 
 	def writePhoneAccountFromContacts(self, CONTACTname, CONTACTphoneNums):
-		for i in range(len(CONTACTname)):
-			for j in range(len(CONTACTphoneNums[i])):
-				if CONTACTphoneNums[i][j] in self.phoneNumberList:					
-					pass
-				else:
-					self.phoneNumberList.append(CONTACTphoneNums[i][j])
-					self.phoneNameList.append(CONTACTname[i])
+		for i in range(len(CONTACTname)):			
+			#for j in range(len(CONTACTphoneNums[i])):
+				#if CONTACTphoneNums[i][j] in self.phoneNumberList:					
+			CONTACTphoneNums[i] = CONTACTphoneNums[i].replace(' ', '')
+			if CONTACTphoneNums[i] in self.phoneNumberList:					
+				pass
+			else:
+				#print(f'CONTACTphoneNums: {CONTACTphoneNums[i]}, CONTACTname: {CONTACTname[i]}')
+				self.phoneNumberList.append(CONTACTphoneNums[i])
+				self.phoneNameList.append(CONTACTname[i])
 # see previous comment of the use of the mobileOperator variable
-					mobileOperator = ""
-					#print('in writePhoneAccountFromContacts, num:' + CONTACTphoneNums[i][j])
-					uuid = self.generateTracePhoneAccount(mobileOperator, CONTACTname[i], CONTACTphoneNums[i][j])
-					self.phoneUuidList.append(uuid)
+				mobileOperator = ""
+				print(f'in writePhoneAccountFromContacts, CONTACTphoneNums[i]={CONTACTphoneNums[i]} ')
+				uuid = self.generateTracePhoneAccount(mobileOperator, CONTACTname[i], CONTACTphoneNums[i])
+				self.phoneUuidList.append(uuid)
 
 	def generateTracePhoneAccount(self, Source, Name, PhoneNum):
 		
@@ -1114,11 +1117,9 @@ class AXIOMtoJSON:
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:accountIdentifier":" "\n' ,\
 			AXIOMtoJSON.C_TAB*2 + '}, \n',\
 			AXIOMtoJSON.C_TAB*2 + '{ \n',\
-			AXIOMtoJSON.C_TAB*2 + '"@type":"uco-observable:PhoneAccountFacet", \n',\
-			AXIOMtoJSON.C_TAB*2 + '"uco-observable:phoneNumber":"' + PhoneNum + '" \n',\
-#	CASE 0.2/UCO 0.4 compliant, no 	uco-observable:name property in observable.ttl
-#			
-		#line += AXIOMtoJSON.C_TAB*2 + '"uco-observable:name":"' + Name + '" \n'
+			AXIOMtoJSON.C_TAB*3 + '"@type":"uco-observable:PhoneAccountFacet", \n',\
+			AXIOMtoJSON.C_TAB*3 + '"uco-observable:phoneNumber":"' + PhoneNum + '", \n',\
+			AXIOMtoJSON.C_TAB*3 + '"uco-core:name":"' + Name + '"\n' ,\
 			AXIOMtoJSON.C_TAB*2 + '} \n',\
 			AXIOMtoJSON.C_TAB + '] \n',\
 			'}'])
@@ -1279,16 +1280,13 @@ class AXIOMtoJSON:
 			AXIOMtoJSON.C_TAB*2 + '{ \n',\
 			AXIOMtoJSON.C_TAB*3 + '"@type":"uco-observable:AccountFacet", \n',\
 			AXIOMtoJSON.C_TAB*3 + '"uco-observable:isActive":true,\n',\
-			AXIOMtoJSON.C_TAB*3 + '"uco-observable:accountIdentifier":" ",\n' ,\
-			AXIOMtoJSON.C_TAB*3 + '"uco-core:name":"' + Name + '"\n' ,\
+			AXIOMtoJSON.C_TAB*3 + '"uco-observable:accountIdentifier":" "\n' ,\
 			AXIOMtoJSON.C_TAB*2 + '}, \n',\
 			AXIOMtoJSON.C_TAB*2 + '{ \n',\
 			AXIOMtoJSON.C_TAB*3 + '"@type":"uco-observable:PhoneAccountFacet", \n',\
-			AXIOMtoJSON.C_TAB*3 + '"uco-observable:phoneNumber":"' + PhoneNum + '" \n',\
+			AXIOMtoJSON.C_TAB*3 + '"uco-observable:phoneNumber":"' + PhoneNum + '", \n',\
+			AXIOMtoJSON.C_TAB*3 + '"uco-core:name":"' + Name + '"\n' ,\
 			lineSource,\
-#	CASE 0.2/UCO 0.4 compliant	
-#	
-		#line += AXIOMtoJSON.C_TAB*2 + '"uco-observable:name":"' + Name + '" \n'
 			AXIOMtoJSON.C_TAB*2 + '} \n',\
 			AXIOMtoJSON.C_TAB + ']\n',\
 			'}'])
@@ -1644,13 +1642,18 @@ class AXIOMtoJSON:
 			
 			if (resPattern):
 				if CALLpartner[i] in self.phoneNumberList:
-					idx = self.phoneNumberList.index(idParty)
+					idx = self.phoneNumberList.index(CALLpartner[i])
 					uuidPartner = self.phoneUuidList[idx]
 				else:	
 					mobileOperator = ""
 					phoneName = ''
+					print(self.phoneNumberList)
+					print(f'in writeCall, CALLpartner[i]=[{CALLpartner[i]}]')
+					self.phoneNumberList.append(CALLpartner[i])
+					self.phoneNameList.append(phoneName)
 					uuidPartner = self.generateTracePhoneAccount(mobileOperator, 
-						phoneName, CALLpartner[i])			
+						phoneName, CALLpartner[i])
+					self.phoneUuidList.append(uuidPartner)			
 			else:
 				#print("CALLappName[" + str(i) + "] = " +  CALLappName[i].strip())
 				if CALLappName[i].strip() in self.appNameList: 
@@ -1689,14 +1692,15 @@ class AXIOMtoJSON:
 			if CONTACTphoneNum[i] == '':
 				continue
 			else:
-				phoneNum = CONTACTphoneNum[i].replace('+', '00')
-				phoneNum = phoneNum.replace(' ', '')
+				#phoneNum = CONTACTphoneNum[i].replace('+', '00')
+				phoneNum = CONTACTphoneNum[i].replace(' ', '')
 				if phoneNum in self.phoneNumberList:					
 						pass
 				else:
 					self.phoneNumberList.append(phoneNum)
 					self.phoneNameList.append(CONTACTname[i])
 					mobileOperator = ""
+					print(f'in ObservableRelationship, phoneNum={phoneNum}')
 					uuid = self.generateTracePhoneAccount(mobileOperator, CONTACTname[i], phoneNum)
 					self.phoneUuidList.append(uuid)
 
@@ -1905,6 +1909,7 @@ class AXIOMtoJSON:
 				self.phoneNameList.append(senderName)
 				mobileOperator = ""		
 				SMSsenderClean = self.__cleanString(SMSsenderClean)
+				print(f'in writeSMS, SMSsenderClean={SMSsenderClean}')
 				phoneParticipantUuid = self.generateTracePhoneAccount(mobileOperator, 
 					senderName, SMSsenderClean)	
 				self.phoneUuidList.append(phoneParticipantUuid)
@@ -1924,6 +1929,7 @@ class AXIOMtoJSON:
 				self.phoneNameList.append(recipientName)
 				mobileOperator = ""
 				SMSrecipientClean = self.__cleanString(SMSrecipientClean)
+				print(f'in writeSMS, SMSrecipientClean={SMSrecipientClean}')
 				phoneRecipientUuid = self.generateTracePhoneAccount(mobileOperator, 
 					recipientName, SMSrecipientClean)	
 				self.phoneUuidList.append(phoneRecipientUuid)
