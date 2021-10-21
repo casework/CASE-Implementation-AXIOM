@@ -1093,7 +1093,7 @@ class AXIOMtoJSON:
 				self.phoneNameList.append(CONTACTname[i])
 # see previous comment of the use of the mobileOperator variable
 				mobileOperator = ""
-				print(f'in writePhoneAccountFromContacts, CONTACTphoneNums[i]={CONTACTphoneNums[i]} ')
+				#print(f'in writePhoneAccountFromContacts, CONTACTphoneNums[i]={CONTACTphoneNums[i]} ')
 				uuid = self.generateTracePhoneAccount(mobileOperator, CONTACTname[i], CONTACTphoneNums[i])
 				self.phoneUuidList.append(uuid)
 
@@ -1624,7 +1624,8 @@ class AXIOMtoJSON:
 			self.appIDList.append(idAppName)
 
 	def writeCall(self, CALLid, CALLappName, CALLtimeStamp, CALLdirection, 
-				CALLduration, CALLpartner, CALLsource, CALLlocation, CALLrecoveryMethod):
+				CALLduration, CALLpartner, CALLpartnerName, CALLsource, CALLlocation, 
+				CALLrecoveryMethod):
 		
 		#print("len(CALLid)=" + str(len(CALLid)) + ', len(CALLpartner)=' + str(len(CALLpartner)))			
 		callOutcome = ''
@@ -1646,13 +1647,12 @@ class AXIOMtoJSON:
 					uuidPartner = self.phoneUuidList[idx]
 				else:	
 					mobileOperator = ""
-					phoneName = ''
-					print(self.phoneNumberList)
-					print(f'in writeCall, CALLpartner[i]=[{CALLpartner[i]}]')
+					#print(self.phoneNumberList)
+					#print(f'in writeCall, CALLpartner[i]=[{CALLpartner[i]}]')
 					self.phoneNumberList.append(CALLpartner[i])
-					self.phoneNameList.append(phoneName)
+					self.phoneNameList.append(CALLpartnerName[i])
 					uuidPartner = self.generateTracePhoneAccount(mobileOperator, 
-						phoneName, CALLpartner[i])
+						CALLpartnerName[i], CALLpartner[i])
 					self.phoneUuidList.append(uuidPartner)			
 			else:
 				#print("CALLappName[" + str(i) + "] = " +  CALLappName[i].strip())
@@ -1700,7 +1700,7 @@ class AXIOMtoJSON:
 					self.phoneNumberList.append(phoneNum)
 					self.phoneNameList.append(CONTACTname[i])
 					mobileOperator = ""
-					print(f'in ObservableRelationship, phoneNum={phoneNum}')
+					#print(f'in ObservableRelationship, phoneNum={phoneNum}')
 					uuid = self.generateTracePhoneAccount(mobileOperator, CONTACTname[i], phoneNum)
 					self.phoneUuidList.append(uuid)
 
@@ -1909,7 +1909,7 @@ class AXIOMtoJSON:
 				self.phoneNameList.append(senderName)
 				mobileOperator = ""		
 				SMSsenderClean = self.__cleanString(SMSsenderClean)
-				print(f'in writeSMS, SMSsenderClean={SMSsenderClean}')
+				#print(f'in writeSMS, SMSsenderClean={SMSsenderClean}')
 				phoneParticipantUuid = self.generateTracePhoneAccount(mobileOperator, 
 					senderName, SMSsenderClean)	
 				self.phoneUuidList.append(phoneParticipantUuid)
@@ -1929,7 +1929,7 @@ class AXIOMtoJSON:
 				self.phoneNameList.append(recipientName)
 				mobileOperator = ""
 				SMSrecipientClean = self.__cleanString(SMSrecipientClean)
-				print(f'in writeSMS, SMSrecipientClean={SMSrecipientClean}')
+				#print(f'in writeSMS, SMSrecipientClean={SMSrecipientClean}')
 				phoneRecipientUuid = self.generateTracePhoneAccount(mobileOperator, 
 					recipientName, SMSrecipientClean)	
 				self.phoneUuidList.append(phoneRecipientUuid)

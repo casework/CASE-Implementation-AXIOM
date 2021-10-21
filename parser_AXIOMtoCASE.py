@@ -89,7 +89,8 @@ class AXIOMgadget():
         if self.reportType == 'mobile':
             caseTrace.writeCall(Handler.CALLid, Handler.CALLappName, Handler.CALLtimeStamp, 
                     Handler.CALLdirection, Handler.CALLduration, Handler.CALLpartner, 
-                    Handler.CALLsource, Handler.CALLlocation, Handler.CALLrecoveryMethod)
+                    Handler.CALLpartnerName, Handler.CALLsource, Handler.CALLlocation, 
+                    Handler.CALLrecoveryMethod)
 
 #-- write SMS
 #
@@ -175,6 +176,7 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.CALLtrace = 'call'
         self.CALLin = False
         self.CALLinPartner = False
+        self.CALLinPartnerName = False
         self.CALLinDirection = False
         #self.CALLinCallStatus = False
         self.CALLinTimeStamp = False
@@ -192,6 +194,7 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.CALL_PHONE_NAME_DEVICE_VALUEin = False
         
         self.CALLpartnerText = ''
+        self.CALLpartnerNameText = ''
         self.CALLdirectionText = ''
         self.CALLtimeStampText = ''
         self.CALLdurationText = ''
@@ -206,6 +209,7 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.CALLid = []
         self.CALLappName = []
         self.CALLpartner = []
+        self.CALLpartnerName = []
         self.CALLdirection = []        
         self.CALLtimeStamp = []
         self.CALLduration = []
@@ -519,8 +523,11 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.CALL_PHONE_NAME_DEVICE_VALUEin = True 
 
     def __processCALL(self, attrFragment):
-        if attrFragment.find('Partner', 0) > -1:  
+        if (attrFragment == 'Partner' or attrFragment == 'Partners'):  
                 self.CALLinPartner = True 
+
+        if attrFragment == 'Partner Name' :  
+                self.CALLinPartnerName = True 
 
         if attrFragment == 'Direction':  
                 self.CALLinDirection = True 
@@ -854,6 +861,7 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.CALLid.append(str(self.CALLtotal))
                 self.CALLappName.append(self.CALLappNameText)
                 self.CALLpartner.append('')
+                self.CALLpartnerName.append('')
                 self.CALLdirection.append('')
                 self.CALLtimeStamp.append('')
                 self.CALLduration.append('')
@@ -1018,6 +1026,11 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.CALLpartner[self.CALLtotal - 1] = self.CALLpartnerText
             self.CALLpartnerText = ''
             self.CALLinPartner = False
+
+        if self.CALLinPartnerName:
+            self.CALLpartnerName[self.CALLtotal - 1] = self.CALLpartnerNameText
+            self.CALLpartnerNameText = ''
+            self.CALLinPartnerName = False
 
         if self.CALLinDirection:
             self.CALLdirection[self.CALLtotal - 1] = self.CALLdirectionText
@@ -1513,6 +1526,8 @@ class ExtractTraces(xml.sax.ContentHandler):
         if self.CALLin:
             if self.CALLinPartner:
                 self.CALLpartnerText += ch
+            if self.CALLinPartnerName:
+                self.CALLpartnerNameText += ch
             if self.CALLinDirection:
                 self.CALLdirectionText += ch
             if self.CALLinTimeStamp:
@@ -1792,6 +1807,7 @@ if __name__ == '__main__':
     elapsedMs + ' hundredths'
     print(Handler.C_green + '\n*** End processing, elapsed time: ' + \
         elapsedTime + '\n\n' + Handler.C_end)
+
 # else:    
 #     xmlFile = '../CASE-dataset.xml.reports/AXIOM/ANDROID/19_AXIOM_ANDROID_CROSSOVER.xml'
 #     jsonFile = './_19-AXIOM-gadget.json'   
