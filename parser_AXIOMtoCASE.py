@@ -173,7 +173,7 @@ class ExtractTraces(xml.sax.ContentHandler):
 #       {CALL_PATH} = //Artifact[@name="Android Call Logs"]/Hits/Hit
 #       {CALL_PATH} = //Artifact[@name="iOS Call Logs"]/Hits/Hit
 #
-        self.CALLtrace = 'call'
+        self.CALL_PATTERN = ('Android Call Logs', 'iOS Call Logs')
         self.CALLin = False
         self.CALLinPartner = False
         self.CALLinPartnerName = False
@@ -225,7 +225,10 @@ class ExtractTraces(xml.sax.ContentHandler):
 #       {CALL_PATH} = //Artifact name="Android Telegram Messages">
 #       {CALL_PATH} = //Artifact name="Snapchat Chat Messages">
 #
-        self.CHATtrace = 'chat'
+        self.CHAT_PATTERN = ('Android WhatsApp Messages', 'iOS WhatsApp Messages',
+                'Android Telegram Messages', 'iOS Telegram Messages', 
+                'Snapchat Chat Messages', 'TikTok Messages', 'Instagram Direct Messages',
+                'Signal Messages', 'Signal Messages - iOS', 'Facebook Messenger Messages')
         self.CHATin = False
         self.CHATinSender = False
         self.CHATinReceiver = False
@@ -317,6 +320,7 @@ class ExtractTraces(xml.sax.ContentHandler):
 #       Android Yahoo Mail Emails.
 #       Not yet extracted: Outlook Emails
 #        
+        self.EMAIL_PATTERN = ('Apple Mail', 'Gmail Emails', 'Android Emails')
         self.EMAILtrace = 'email'
         self.EMAILin = False
         self.EMAILinSender= False
@@ -433,7 +437,7 @@ class ExtractTraces(xml.sax.ContentHandler):
 #       {SMS_PATH} = //Artifact[@name="Android MMS"]/Hits/Hit
 #       {SMS_PATH} = //Artifact[@name="iOS iMessage/SMS/MMS"]/Hits/Hit
 #    
-        self.SMStrace = 'sms'
+        self.SMS_PATTERN = ('Android SMS', 'iOS iMessage/SMS/MMS')
         self.SMSin = False
         self.SMSinPartner = False
         self.SMSinRecipient = False
@@ -475,7 +479,8 @@ class ExtractTraces(xml.sax.ContentHandler):
 #       {WEB_HISTORY_PATH} = //Artifact[@name="Firefox Web History"]/Hits/Hit 
 #       {WEB_HISTORY_PATH} = //Artifact[@name="Edge/Internet Explorer 10-11 Main History"]/Hits/Hit         
 #    
-        self.WEBtrace = 'web'
+        self.WEB_PATTERN = ('Chrome Web History', 'Safari History', 'Firefox Web History',
+                'Samsung Browser Web History')
         self.WEBin = False
         self.WEBinUrl = False
         self.WEBinLastVisited = False
@@ -523,7 +528,7 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.CALL_PHONE_NAME_DEVICE_VALUEin = True 
 
     def __processCALL(self, attrFragment):
-        if (attrFragment == 'Partner' or attrFragment == 'Partners'):  
+        if attrFragment in ('Partner', 'Partners'):  
                 self.CALLinPartner = True 
 
         if attrFragment == 'Partner Name' :  
@@ -549,21 +554,17 @@ class ExtractTraces(xml.sax.ContentHandler):
 
     def __processCHAT(self, attrFragment):
 #---    the first condition is for Android WhatsApp Messages, iOS WhatsApp Messages
-#       and for Snapchat Chat Messages
-#       the second condition is for iOS Telegram Messages
+#       and for Snapchat Chat Messages, the second condition is for iOS Telegram Messages
 #        
-        if (attrFragment == 'Sender' or 
-            attrFragment == 'Sender Name'):  
+        if attrFragment in ('Sender', 'Sender Name'):  
             self.CHATinSender = True 
 
 #---    the first condition is for Android WhatsApp Messages and iOS WhatsApp Messages
 #       the second condition is for iOS Telegram Messages
 #       the third condition is for Snapchat Chat Messages            
 #
-        if (attrFragment == 'Receiver' or
-            attrFragment == 'Recipient Name' or 
-            attrFragment == 'Recipient(s)'): 
-            #print("CHATapplicationText=" + self.CHATapplicationText)
+        if attrFragment in ('Receiver', 'Receiver Name', 'Recipient Name', 'Recipient', 
+                'Recipient(s)'): 
             self.CHATinReceiver = True 
 
 #---    the condition is for Android Telegram Messages
@@ -571,23 +572,23 @@ class ExtractTraces(xml.sax.ContentHandler):
         if attrFragment == 'Partner':  
             self.CHATinPartner = True 
 
-        if attrFragment.find('Message Sent Date/Time') > -1:  
+        if (attrFragment.find('Message Sent Date/Time') > -1 or 
+             attrFragment.find('Message Received Date/Time') > -1):  
             self.CHATinDateTimeReceived = True            
 
-        if attrFragment.find('Message Received Date/Time') > -1: 
-            self.CHATinDateTimeReceived = True 
 #---    the first condition is for iOS WhatsApp Messages
 #       the second condition is for Telegram Messages   
 #            
         if (attrFragment.find('Message Date/Time') > -1 or 
-            attrFragment.find('Creation Date/Time') > -1):  
+            attrFragment.find('Creation Date/Time') > -1 or 
+            attrFragment.find('Date/Time', 0) > - 1 or
+            attrFragment == 'Created Date/Time'):  
             self.CHATinDateTime = True
 
 #---    the first condition is for WhatsApp Messages
 #       the second condition is for Telegram Messages   
 #            
-        if (attrFragment == 'Message' or 
-            attrFragment == 'Message Body'):
+        if attrFragment in ('Message', 'Message Body', 'Text'):
             self.CHATinMessage = True 
 
         if attrFragment == 'Message Status':  
@@ -631,18 +632,16 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.DEVICEinName = True 
 
     def __processEMAIL(self, attrFragment):
-        if (attrFragment == 'Sender' or attrFragment == 'From Address' or 
-            attrFragment == 'From'):  
+        if attrFragment in ('Sender', 'From Address', 'From'):  
             self.EMAILinSender = True 
 
-        if (attrFragment == 'Recipients' or attrFragment == 'To Address(es)' or 
-            attrFragment == 'To'):  
+        if attrFragment in ('Recipients', 'To Address(es)', 'To'):  
             self.EMAILinRecipients = True
 
-        if (attrFragment.lower() == 'cc' or attrFragment.lower() == 'cc address(es)'):  
+        if attrFragment.lower() in ('cc', 'cc address(es)'):  
             self.EMAILinCC = True 
 
-        if (attrFragment.lower() == 'bcc' or attrFragment.lower() == 'bcc address(es)'):  
+        if attrFragment.lower() in ('bcc', 'bcc address(es)'):  
             self.EMAILinBCC = True 
 
         if attrFragment.find('Date/Time') > - 1:  
@@ -670,18 +669,13 @@ class ExtractTraces(xml.sax.ContentHandler):
     def __processFILE(self, attrFragment):
         if attrFragment == 'Tags':
             self.FILEinTag = True
-        if (attrFragment == 'File Name' or 
-            attrFragment == 'Filename' or 
-            attrFragment == " File" or 
-            attrFragment == "_Video" or 
-            attrFragment == "File"):
+        if attrFragment in ('File Name', 'Filename', 'File', '_Video'):
             self.FILEinFileName = True
         if attrFragment == 'Image':
             self.FILEinImage = True
         if attrFragment == 'File Extension':
             self.FILEinFileExtension = True
-        if (attrFragment == 'Size (Bytes)' or 
-            attrFragment == 'File Size (Bytes)'):
+        if attrFragment in ('Size (Bytes)', 'File Size (Bytes)'):
             self.FILEinFileSize = True
         if attrFragment.find('Created Date/Time') > -1:
             self.FILEinCreated = True
@@ -725,8 +719,7 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.SMSinSentDateTime = True
         if attrFragment == 'Message':
             self.SMSinMessage = True
-        if (attrFragment == 'Message Direction' or 
-            attrFragment == 'Type'):
+        if attrFragment in ('Message Direction', 'Type'):
             self.SMSinDirection = True
         if attrFragment == 'Source':
             self.SMSinSource = True
@@ -742,8 +735,7 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.WEBinLastVisited = True
         if attrFragment == 'Title':
             self.WEBinTitle = True
-        if (attrFragment == 'Visit Count' or 
-            attrFragment == 'Access Count'):
+        if attrFragment in ('Visit Count', 'Access Count'):
             self.WEBinVisitCount = True
         if attrFragment == 'Source':
             self.WEBinSource = True
@@ -775,13 +767,13 @@ class ExtractTraces(xml.sax.ContentHandler):
             attrName = attrs.get('name')
 #---    checks on Attributes
 #        
-            if  (attrName == 'Android WhatsApp Accounts Information'): 
+            if  attrName in ('Android WhatsApp Accounts Information', 
+                'SIM Card Activity'): 
                 self.CALL_PHONE_NUM_DEVICEin = True
                 self.Observable = True
                 self.skipLine = True
 
-            if  (attrName == 'Android Call Logs' or 
-                attrName == 'iOS Call Logs') :
+            if  attrName in self.CALL_PATTERN:
                 self.CALLin = True
                 self.Observable = True
                 self.skipLine = True   
@@ -792,9 +784,7 @@ class ExtractTraces(xml.sax.ContentHandler):
 
 #---    It captures both "Android WhatsApp Messages"  and "iOS WhatsApp Messages"
 #                
-            if  (attrName.find('WhatsApp Messages') > -1 or 
-                attrName.find('Telegram Messages') > -1 or 
-                attrName == 'Snapchat Chat Messages'):
+            if  attrName in self.CHAT_PATTERN:            
                 self.CHATin = True
                 self.Observable = True
                 self.skipLine = True
@@ -825,23 +815,18 @@ class ExtractTraces(xml.sax.ContentHandler):
 #       Android Emails. Gmail Emails, Android Yahoo Mail Emails, Outlook Emails, 
 #       MBOX Emails or Apple Mail
 #
-            if  (attrName.find(' Emails') > -1 or 
-                attrName == 'Apple Email'):
+            if  attrName in self.EMAIL_PATTERN:
                 self.EMAILin = True
                 self.Observable = True
                 self.skipLine = True
                 self.EMAILappName = attrName
 
-            if  (attrName == 'Android SMS' or 
-                 attrName == 'iOS iMessage/SMS/MMS'):
+            if  attrName in self.SMS_PATTERN:
                 self.SMSin = True
                 self.Observable = True
                 self.skipLine = True
 
-            if  (attrName == 'Chrome Web History' or
-                attrName == 'Safari History' or 
-                attrName == 'Firefox Web History' or                
-                attrName == 'Samsung Browser Web History' or 
+            if  (attrName in self.WEB_PATTERN  or 
                 attrName.find('Edge/Internet Explorer') > -1):
                 self.WEBin = True
                 self.Observable = True
@@ -1014,11 +999,9 @@ class ExtractTraces(xml.sax.ContentHandler):
 
     def __endElementFragmentPHONE_NUM(self):        
         if self.CALL_PHONE_NUM_DEVICE_VALUEin:            
-            #self.CALLphoneNumberDevice = '' 
             self.CALL_PHONE_NUM_DEVICE_VALUEin = False
 
         if self.CALL_PHONE_NAME_DEVICE_VALUEin:            
-            #self.CALLphoneNumberDevice = '' 
             self.CALL_PHONE_NAME_DEVICE_VALUEin = False
 
     def __endElementFragmentCALL(self):
@@ -1101,9 +1084,9 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.CHATinMessageStatus = False
 
         if self.CHATinMessageType:
-            if self.CHATmessageTypeText.lowercase() == 'incoming':
-                self.CHATdateTimeReceived[self.CHATtotal - 1] = self.CHATdateTimeText    
-            if self.CHATmessageTypeText.lowercase() == 'outgoing':
+            if self.CHATmessageTypeText.lower() == 'incoming':
+                self.CHATdateTimeReceived[self.CHATtotal - 1] = self.CHATdateTimeText
+            if self.CHATmessageTypeText.lower() == 'outgoing':
                 self.CHATdateTimeSent[self.CHATtotal - 1] = self.CHATdateTimeText    
 
             self.CHATdateTimeText = ''
@@ -1113,6 +1096,16 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.CHATsource[self.CHATtotal - 1] = self.CHATsourceText
             self.CHATsourceText = ''
             self.CHATinSource = False
+
+#---    Facebook Messenger Messages do not have the type (Incoming/Outgoing) where
+#       the Date/Time Received or Sent is set up, so if both are empty it is a Facebook
+#       Message, whose Date/Time is still remained empty            
+#            
+            if  (self.CHATdateTimeSent[self.CHATtotal - 1] == '' and 
+                self.CHATdateTimeReceived[self.CHATtotal - 1] == ''):
+                self.CHATdateTimeSent[self.CHATtotal - 1] = self.CHATdateTimeText
+                self.CHATdateTimeText = ''
+
 
         if self.CHATinLocation:
             self.CHATlocation[self.CHATtotal - 1] = self.CHATlocationText
@@ -1542,7 +1535,8 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.CALLrecoveyMethodText += ch
 
         if self.CALL_PHONE_NUM_DEVICE_VALUEin:            
-            self.CALLphoneNumberDevice += ch
+            if self.CALLphoneNumberDevice == '':
+                self.CALLphoneNumberDevice += ch
 
         if self.CALL_PHONE_NAME_DEVICE_VALUEin:            
             self.CALLphoneNameDevice += ch
@@ -1561,7 +1555,7 @@ class ExtractTraces(xml.sax.ContentHandler):
             if self.CHATinDateTimeReceived:
                 self.CHATdateTimeReceivedText += ch
             if self.CHATinDateTime:
-                self.CHATdateTimeText += ch
+                self.CHATdateTimeText += ch                
             if self.CHATinMessage:
                 self.CHATmessageText += ch
             if self.CHATinMessageStatus:

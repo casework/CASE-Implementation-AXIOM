@@ -119,29 +119,26 @@ class AXIOMtoJSON:
 		CHATdateTimeSent, CHATdateTimeReceived, CHATmessage, CHATmessageStatus,
 		CHATapplication, CHATsource, CHATlocation, CHATrecoveryMethod, CALLphoneNumber):
 
-		for i in range(len(CHATsender)):
-			#print('sender[' + str(i) + ']=' + CHATsender[i])
-			if CHATsender[i].lower().find('local user') > -1:
-				CHATsender[i] = CALLphoneNumber
-			
-			#print('receiver[' + str(i) + ']=' + CHATreceiver[i])
+		for i, chat_sender in enumerate(CHATsender):
+			if chat_sender.lower().find('local user') > -1:
+				chat_sender = CALLphoneNumber
 
 			if CHATreceiver[i].lower().find('local user') > -1:
 				CHATreceiver[i] = CALLphoneNumber
 			
 			chatFound = False
 			idx = -1
-			for j in range(len(chatThread)):
-				if (CHATsender[i] in chatThread[j] and  
-					  CHATreceiver[i] in chatThread[j] and 
-					  CHATapplication[i] in chatThread[j]):
+			for j, chat_thread in enumerate(chatThread):
+				if (chat_sender in chat_thread and
+					  CHATreceiver[i] in chat_thread and 
+					  CHATapplication[i] in chat_thread):
 					idx = j
 					chatFound = True
 					break
 			
 			if chatFound:		
 				self.CHATids[idx].append(CHATid[i])
-				self.CHATsenders[idx].append(CHATsender[i])
+				self.CHATsenders[idx].append(chat_sender)
 				self.CHATreceivers[idx].append(CHATreceiver[i])
 				self.CHATdateTimeSents[idx].append(CHATdateTimeSent[i])
 				self.CHATdateTimeReceiveds[idx].append(CHATdateTimeReceived[i])
@@ -153,9 +150,8 @@ class AXIOMtoJSON:
 				self.CHATapplications[idx].append(CHATapplication[i])
 			else:
 				idx = len(chatThread) - 1
-				#print('chatThread: ' + str(idx))
 				self.CHATids.append([CHATid[i]])
-				self.CHATsenders.append([CHATsender[i]])
+				self.CHATsenders.append([chat_sender])
 				self.CHATreceivers.append([CHATreceiver[i]])
 				self.CHATdateTimeSents.append([CHATdateTimeSent[i]])
 				self.CHATdateTimeReceiveds.append([CHATdateTimeReceived[i]])
@@ -165,9 +161,7 @@ class AXIOMtoJSON:
 				self.CHATlocations.append([CHATlocation[i]])
 				self.CHATrecoveryMethods.append([CHATrecoveryMethod[i]])
 				self.CHATapplications.append([CHATapplication[i]])
-				chatThread.append(CHATsender[i] + '#' + CHATreceiver[i] + '#' + CHATapplication[i])
-		# print("chatThread:")
-		# print(chatThread)
+				chatThread.append(chat_sender + '#' + CHATreceiver[i] + '#' + CHATapplication[i])
 
 	def __cleanDate(self, initialDate):
 		aMonths = {
@@ -289,13 +283,13 @@ class AXIOMtoJSON:
 		# creating the Provenance_Record of the Result/Output of the Acquisition 
 		# action
 		idFilesAcquisition = []
-		for i in range(len(imagePath)):
+		for i, image_path in enumerate(imagePath):
 			if imageMetadataHashSHA[i].strip() == '':
-				idFileAcquisition = self.__generateTraceFile(imagePath[i], 
+				idFileAcquisition = self.__generateTraceFile(image_path, 
 				imageSize[i], 'MD5', imageMetadataHashMD5[i], '', 
 				'', '', '', '', '', '', '', '', '', '', '', '')  				 				
 			else:
-				idFileAcquisition = self.__generateTraceFile(imagePath[i], 
+				idFileAcquisition = self.__generateTraceFile(image_path, 
 				imageSize[i], 'SHA256', imageMetadataHashSHA[i], '', 
 				'', '', '', '', '', '', '', '', '', '', '', '') 				
 			
@@ -304,11 +298,11 @@ class AXIOMtoJSON:
 
 		idProvenanceAcquisitionFiles = \
 			self.__generateTraceProvencance(idFilesAcquisition, 
-        	'Acquisition files', '', deviceAcquisitionStartTime)
+				'Acquisition files', '', deviceAcquisitionStartTime)
 
 		idProvenanceAcquisitionFilesList = []
 		idProvenanceAcquisitionFilesList.append(idProvenanceAcquisitionFiles)
-        
+
 		idProvencanceAcquisitionAction = \
 		self.__generateTraceInvestigativeAction('acquisition', 
 			'Forensic mobile device acquisition', deviceAcquisitionStartTime, 
@@ -321,8 +315,8 @@ class AXIOMtoJSON:
 
 		idProvenanceExtractionFiles = \
 		self.__generateTraceProvencance(idFilesExtraction, 'Extraction',
-			'', deviceExtractionStartTime);
-        
+			'', deviceExtractionStartTime)
+
 		idProvenanceExtractionFilesList = []
 		idProvenanceExtractionFilesList.append(idProvenanceExtractionFiles)
 		self.__generateTraceInvestigativeAction('extraction', 
@@ -553,14 +547,14 @@ class AXIOMtoJSON:
 				listFileNames.append('')
 
 
-		for i in range(len(listFileNames)):
-			if (listFileNames[i].strip() == '') and \
+		for i, list_file_name in enumerate(listFileNames):
+			if (list_file_name.strip() == '') and \
 			 	(listFileUrls[i].strip() == ''):
 				pass
 			else:
 				# listFileUrls[i] will be stored in the property
 				# path of the FILE trace
-				fileUuid = self.__generateTraceFile(listFileNames[i], 
+				fileUuid = self.__generateTraceFile(list_file_name, 
 				'', '', '', '', '', '', '', listFileUrls[i],
 				'', '', '', '', '', '', '', '')
 				
@@ -656,7 +650,7 @@ class AXIOMtoJSON:
 		EMAILidentifierFROM, EMAILidentifiersTO, EMAILidentifiersCC, 
 		EMAILidentifiersBCC, EMAILbody, EMAILsubject, EMAILtimeStamp, 
 		EMAILattachmentsFilename):
-
+		
 		if EMAILidentifierFROM.strip() in self.EMAILaddressList:
 			idx = self.EMAILaddressList.index(EMAILidentifierFROM.strip())
 			idFROM = self.EMAILaccountIdList[idx]
@@ -671,16 +665,16 @@ class AXIOMtoJSON:
 #---	addresses in the TO field, are separated with comma
 #
 		EMAILtoList = EMAILidentifiersTO.split(',')
-		for i in range(len(EMAILtoList)):
-			if EMAILtoList[i].strip() == '':
+		for i, email_to_list in enumerate(EMAILtoList):
+			if email_to_list.strip() == '':
 				pass
 			else:
-				if EMAILtoList[i].strip() in self.EMAILaddressList:
-					idx = self.EMAILaddressList.index(EMAILtoList[i].strip())
+				if email_to_list.strip() in self.EMAILaddressList:
+					idx = self.EMAILaddressList.index(email_to_list.strip())
 					idTO = '{"@id":"' + self.EMAILaccountIdList[idx] + '"}'
 				else:
-					self.EMAILaddressList.append(EMAILtoList[i].strip())
-					uuidEmail = self.__generateTraceEmailAccount(EMAILtoList[i].strip())
+					self.EMAILaddressList.append(email_to_list.strip())
+					uuidEmail = self.__generateTraceEmailAccount(email_to_list.strip())
 					self.EMAILaccountIdList.append(uuidEmail)
 					idTO = '{"@id":"' + uuidEmail + '"}'
 				itemsTO += itemsTO + idTO + ','
@@ -690,16 +684,16 @@ class AXIOMtoJSON:
 
 		itemsCC = ''
 		EMAILtoList = EMAILidentifiersCC.split(',')
-		for i in range(len(EMAILtoList)):
-			if EMAILtoList[i].strip() == '':
+		for i, email_to_list in enumerate(EMAILtoList):
+			if email_to_list.strip() == '':
 				pass
 			else:
-				if EMAILtoList[i].strip() in self.EMAILaddressList:
-					idx = self.EMAILaddressList.index(EMAILtoList[i].strip())
+				if email_to_list.strip() in self.EMAILaddressList:
+					idx = self.EMAILaddressList.index(email_to_list.strip())
 					idCC = '{"@id":"' + self.EMAILaccountIdList[idx] + '"}'
 				else:
-					self.EMAILaddressList.append(EMAILtoList[i].strip())
-					uuidEmail = self.__generateTraceEmailAccount(EMAILtoList[i].strip())
+					self.EMAILaddressList.append(email_to_list.strip())
+					uuidEmail = self.__generateTraceEmailAccount(email_to_list.strip())
 					self.EMAILaccountIdList.append(uuidEmail)
 					idCC = '{"@id":"' + uuidEmail + '"}'
 				itemsCC += itemsCC + idCC + ','
@@ -712,16 +706,16 @@ class AXIOMtoJSON:
 		
 		itemsBCC = ''
 		EMAILtoList = EMAILidentifiersBCC.split(',')
-		for i in range(len(EMAILtoList)):
-			if EMAILtoList[i].strip() == '':
+		for i, email_to_list in enumerate(EMAILtoList):
+			if email_to_list.strip() == '':
 				pass
 			else:
-				if EMAILtoList[i].strip() in self.EMAILaddressList:
-					idx = self.EMAILaddressList.index(EMAILtoList[i].strip())
+				if email_to_list.strip() in self.EMAILaddressList:
+					idx = self.EMAILaddressList.index(email_to_list.strip())
 					idBCC = '{"@id":"' + self.EMAILaccountIdList[idx] + '"}'
 				else:
-					self.EMAILaddressList.append(EMAILtoList[i].strip())
-					uuidEmail = self.__generateTraceEmailAccount(EMAILtoList[i].strip())
+					self.EMAILaddressList.append(email_to_list.strip())
+					uuidEmail = self.__generateTraceEmailAccount(email_to_list.strip())
 					self.EMAILaccountIdList.append(uuidEmail)
 					idBCC = '{"@id":"' + uuidEmail + '"}'
 				itemsBCC += itemsBCC + idBCC + ','
@@ -793,11 +787,11 @@ class AXIOMtoJSON:
 		self.FileOut.write(line);
 		self.__generateChainOfEvidence(EMAILsource, EMAILlocation, uuid)		
 
-		for i in range(len(EMAILattachmentsFilename)):
-			if EMAILattachmentsFilename[i].strip() == '':
+		for i, email_attachment_file in enumerate(EMAILattachmentsFilename):
+			if email_attachment_file.strip() == '':
 				pass
 			else:
-				fileUuid = self.__generateTraceFile(EMAILattachmentsFilename[i], 
+				fileUuid = self.__generateTraceFile(email_attachment_file, 
 				'', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '')
 				self.__generateTraceRelation(fileUuid, uuid, 'Attached_To', 
 				'', '')
@@ -866,7 +860,7 @@ class AXIOMtoJSON:
 	def __generateTraceFile(self, FILEpath, FILEsize, FILEhashType, 
 		FILEHashValue, FILETag, FILEtimeC, FILEtimeM, FILEtimeA, FILElocalPath, 
 		FILEextension, FILEexifMake, FILEexifModel, FILEexifLatitudeRef, FILEexifLatitude, 
-        FILEexifLongitudeRef, FILEexifLongitude, FILEexifAltitude):
+		FILEexifLongitudeRef, FILEexifLongitude, FILEexifAltitude):
 		
 		
 
@@ -1081,20 +1075,16 @@ class AXIOMtoJSON:
 		return uuid
 
 	def writePhoneAccountFromContacts(self, CONTACTname, CONTACTphoneNums):
-		for i in range(len(CONTACTname)):			
-			#for j in range(len(CONTACTphoneNums[i])):
-				#if CONTACTphoneNums[i][j] in self.phoneNumberList:					
+		for i, contact_name in enumerate(CONTACTname):
 			CONTACTphoneNums[i] = CONTACTphoneNums[i].replace(' ', '')
 			if CONTACTphoneNums[i] in self.phoneNumberList:					
 				pass
 			else:
-				#print(f'CONTACTphoneNums: {CONTACTphoneNums[i]}, CONTACTname: {CONTACTname[i]}')
 				self.phoneNumberList.append(CONTACTphoneNums[i])
-				self.phoneNameList.append(CONTACTname[i])
-# see previous comment of the use of the mobileOperator variable
+				self.phoneNameList.append(contact_name)
 				mobileOperator = ""
-				#print(f'in writePhoneAccountFromContacts, CONTACTphoneNums[i]={CONTACTphoneNums[i]} ')
-				uuid = self.generateTracePhoneAccount(mobileOperator, CONTACTname[i], CONTACTphoneNums[i])
+				uuid = self.generateTracePhoneAccount(mobileOperator, contact_name, 
+					CONTACTphoneNums[i])
 				self.phoneUuidList.append(uuid)
 
 	def generateTracePhoneAccount(self, Source, Name, PhoneNum):
@@ -1463,7 +1453,7 @@ class AXIOMtoJSON:
 				line += AXIOMtoJSON.C_TAB*3 + '"uco-tool:itemName":"' + listItems[0] + '",\n'
 				line += AXIOMtoJSON.C_TAB*3 + '"uco-tool:itemValue":"' + listItems[1] + '"\n'
 				line += AXIOMtoJSON.C_TAB*3 + '},\n' 
-    
+ 
 			listItems.clear()
 			listItems += confList[n].split('@')
 			line += AXIOMtoJSON.C_TAB*2 + '{\n'
@@ -1600,7 +1590,7 @@ class AXIOMtoJSON:
 			line += AXIOMtoJSON.C_TAB*2 + ']\n'  						
 			line += AXIOMtoJSON.C_TAB + '}\n'  					
 			line += AXIOMtoJSON.C_TAB + ']\n'  						
-			line += '}'   						
+			line += '}'						
 			
 			if self.commaLine:
 				self.FileOut.write(', \n')
@@ -1616,21 +1606,18 @@ class AXIOMtoJSON:
 	# an uco-observable:Application item is created
 	def storeUserAccount(self, U_ACCOUNTsource, U_ACCOUNTname,
 			U_ACCOUNTusername):
-		for i in range(len(U_ACCOUNTsource)):
-			idAppName = self.__generateTraceAppName(U_ACCOUNTsource[i])
-			self.appNameList.append(U_ACCOUNTsource[i])
-			#self.appAccountNameList.append(U_ACCOUNTname[i])
-			#self.appAccountUsernameList.append(U_ACCOUNTusername[i])
+		for i, u_accont_source in enumerate(U_ACCOUNTsource):
+			idAppName = self.__generateTraceAppName(u_accont_source)
+			self.appNameList.append(u_accont_source)
 			self.appIDList.append(idAppName)
 
 	def writeCall(self, CALLid, CALLappName, CALLtimeStamp, CALLdirection, 
 				CALLduration, CALLpartner, CALLpartnerName, CALLsource, CALLlocation, 
 				CALLrecoveryMethod):
 		
-		#print("len(CALLid)=" + str(len(CALLid)) + ', len(CALLpartner)=' + str(len(CALLpartner)))			
 		callOutcome = ''
 		
-		for i in range(len(CALLid)):
+		for i, call_id in enumerate(CALLid):
 			if CALLdirection[i].lower() == 'incoming':
 					phoneTO = self.phoneOwnerNumber
 					phoneFROM = CALLpartner[i]
@@ -1647,15 +1634,12 @@ class AXIOMtoJSON:
 					uuidPartner = self.phoneUuidList[idx]
 				else:	
 					mobileOperator = ""
-					#print(self.phoneNumberList)
-					#print(f'in writeCall, CALLpartner[i]=[{CALLpartner[i]}]')
 					self.phoneNumberList.append(CALLpartner[i])
 					self.phoneNameList.append(CALLpartnerName[i])
 					uuidPartner = self.generateTracePhoneAccount(mobileOperator, 
 						CALLpartnerName[i], CALLpartner[i])
 					self.phoneUuidList.append(uuidPartner)			
 			else:
-				#print("CALLappName[" + str(i) + "] = " +  CALLappName[i].strip())
 				if CALLappName[i].strip() in self.appNameList: 
 					idx = self.appNameList.index(CALLappName[i].strip())
 					idAppName = self.appNameList[idx]
@@ -1678,17 +1662,18 @@ class AXIOMtoJSON:
 			if CALLdirection[i].lower() == 'incoming':
 				uuid = self.__generateTracePhoneCall(CALLdirection[i].lower(), 
 					CALLtimeStamp[i], uuidPartner, self.phoneOwnerUuid, CALLduration[i],
-                           CALLrecoveryMethod[i], callOutcome)
+					CALLrecoveryMethod[i], callOutcome)
 			else:
 				uuid = self.__generateTracePhoneCall(CALLdirection[i].lower(), 
 					CALLtimeStamp[i], self.phoneOwnerUuid, uuidPartner, CALLduration[i],
-                           CALLrecoveryMethod[i], callOutcome)
+					CALLrecoveryMethod[i], callOutcome)
 			
 			self.__generateChainOfEvidence(CALLsource[i], CALLlocation[i], uuid)
 
 	def ObservableRelationship(self, CONTACTname, CONTACTphoneNum,
 				CONTACTsource, CONTACTlocation, CONTACTrecoveryMethod):
-		for i in range(len(CONTACTname)):
+		
+		for i, contact_name in enumerate(CONTACTname):
 			if CONTACTphoneNum[i] == '':
 				continue
 			else:
@@ -1698,10 +1683,10 @@ class AXIOMtoJSON:
 						pass
 				else:
 					self.phoneNumberList.append(phoneNum)
-					self.phoneNameList.append(CONTACTname[i])
+					self.phoneNameList.append(contact_name)
 					mobileOperator = ""
 					#print(f'in ObservableRelationship, phoneNum={phoneNum}')
-					uuid = self.generateTracePhoneAccount(mobileOperator, CONTACTname[i], phoneNum)
+					uuid = self.generateTracePhoneAccount(mobileOperator, contact_name, phoneNum)
 					self.phoneUuidList.append(uuid)
 
 	def writeHeader(self):
@@ -1749,10 +1734,10 @@ class AXIOMtoJSON:
 	def writeFiles(self, FILEid, FILEtag, FILEname, FILElocalPath, FILEimage,
 					FILEsize, FILEcreated, FILEmodified, FILEaccessed, FILEmd5,
 					FILEexifMake, FILEexifModel, FILEexifLatitudeRef, FILEexifLatitude, 
-                	FILEexifLongitudeRef, FILEexifLongitude, FILEexifAltitude,
+					FILEexifLongitudeRef, FILEexifLongitude, FILEexifAltitude,
 					FILEsource, FILElocation, FILErecoveryMethod):
 			
-			for i in range(len(FILEid)):			
+			for i, file_id in enumerate(FILEid):
 				if FILEname[i] == '':
 					FILEname[i] = FILEimage[i]
 				
@@ -1768,7 +1753,7 @@ class AXIOMtoJSON:
 						FILEexifLatitude[i], FILEexifLongitudeRef[i], 
 						FILEexifLongitude[i], FILEexifAltitude[i])
 
-					self.FILEuuid[FILEid[i]] = uuid
+					self.FILEuuid[file_id] = uuid
 
 	def writeChat(self, CHATid, CHATsender, CHATreceiver, CHATdateTimeSent, 
 							CHATdateTimeReceived, CHATmessage, CHATmessageStatus, 
@@ -1784,14 +1769,14 @@ class AXIOMtoJSON:
 				CHATapplication, CHATsource, CHATlocation, CHATrecoveryMethod, 
 				self.phoneOwnerNumber)			
 
-		for i in range(len(self.CHATids)):
+		for i, chat_id in enumerate(self.CHATids):
 #---	CHATidAccountList contains the list of the Mesages uuid of CHATs
 #			CHATthread contains the values for the generation of the 
 #			ChatThreadFacet Observable	
 #								
 			self.CHATthread = []	
 			self.chatIdAccountList = []			
-			for j in range(len(self.CHATids[i])):
+			for j, chat_id_item in enumerate(chat_id):
 				if self.CHATapplications[i][j].strip().lower() in self.appNameList: 
 					idx = self.appNameList.index(self.CHATapplications[i][j].strip().lower())
 					idAppName = self.appNameList[idx]
@@ -1824,9 +1809,9 @@ class AXIOMtoJSON:
 					self.CHATaccountIdList.append(CHATmsgTo)
 				
 
-# if Identifiers TO is empty, the array CHATpartyIdentifiers must
-# be iterated to find the right Party
-				
+#---	if Identifiers TO is empty, the array CHATpartyIdentifiers must
+#		be iterated to find the right Party
+#								
 				if self.CHATmessageStatuses[i][j].lower().find('received') > - 1:
 					CHATdirection = 'Incoming'
 					CHATdate = self.CHATdateTimeReceiveds[i][j] 
@@ -1858,11 +1843,11 @@ class AXIOMtoJSON:
 
 	def writeEmail(self, EMAILid, EMAILapp, EMAILidentifierFROM, 
 				EMAILidentifiersTO, EMAILidentifiersCC, EMAILidentifiersBCC, 
-                EMAILbody, EMAILsubject, EMAILtimeStamp, EMAILattachmentsFilename,
-                EMAILsource, EMAILlocation, EMAILrecoveryMethod):
+				EMAILbody, EMAILsubject, EMAILtimeStamp, EMAILattachmentsFilename,
+				EMAILsource, EMAILlocation, EMAILrecoveryMethod):
 		
-		for i in range(len(EMAILid)):			
-			self.__generateTraceEmail(EMAILid[i], EMAILrecoveryMethod[i], EMAILsource[i],
+		for i, email_id in enumerate(EMAILid):
+			self.__generateTraceEmail(email_id, EMAILrecoveryMethod[i], EMAILsource[i],
 				EMAILlocation[i], EMAILidentifierFROM[i], EMAILidentifiersTO[i], 
 				EMAILidentifiersCC[i], EMAILidentifiersBCC[i], EMAILbody[i], 
 				EMAILsubject[i], EMAILtimeStamp[i], EMAILattachmentsFilename[i])
@@ -1888,7 +1873,7 @@ class AXIOMtoJSON:
 					SMSsentDateTime, SMSmessage, SMSdirection, SMSsource,
 					SMSlocation, SMSrecoveryMethod):
 
-		for i in range(len(SMSid)):			
+		for i, sms_id in enumerate(SMSid):
 			phoneUuidTo = ''
 			phoneUuidFrom = ''
 			SMSsenderClean = SMSsender[i].strip()
@@ -1898,7 +1883,6 @@ class AXIOMtoJSON:
 
 #---	get rid of hex chars byte not accepted in JSON values
 #			
-			#SMSsenderClean = '?'.join(hex(ord(x))[2:] for x in SMSsenderClean)
 			if SMSsenderClean in self.phoneNumberList:						
 				idx = self.phoneNumberList.index(SMSsenderClean)						
 				userId = self.phoneNumberList[idx]
@@ -1918,7 +1902,6 @@ class AXIOMtoJSON:
 			if SMSrecipientClean.lower() == 'local user':
 				SMSrecipientClean = self.phoneOwnerNumber
 
-			#SMSrecipientClean = '?'.join(hex(ord(x))[2:] for x in SMSrecipientClean)
 			if SMSrecipientClean in self.phoneNumberList:						
 				idx = self.phoneNumberList.index(SMSrecipientClean)						
 				userId = self.phoneNumberList[idx]
