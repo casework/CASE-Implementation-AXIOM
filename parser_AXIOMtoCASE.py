@@ -144,10 +144,6 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.lineXML = 0
 
         self.skipLine = False
-        self.FILEkind = ['Pictures', 'Videos', 'RTF Documents', 'Excel Documents',\
-            "PowerPoint Documents", "Audio", "PDF Documents", "Word Documents", \
-            "WordPerfect Files", "Calc Documents", "Writer Documents", "Text Documents"]
-
 
         self.inHit = False
         self.Observable = False
@@ -366,6 +362,10 @@ class ExtractTraces(xml.sax.ContentHandler):
 #---    FILE  section - XPath
 #       {FILE_PATH} = //Artifact[@name="Pictures"]/Hits/Hit
 #
+        self.FILE_PATTERN =('Pictures', 'Videos', 'RTF Documents', 'Excel Documents',
+                'PowerPoint Documents', 'Audio', 'PDF Documents', 'Word Documents', 
+                'WordPerfect Files', 'Calc Documents', 'Writer Documents', 'Text Documents',
+                'CSV Documents')
         self.FILEin = False
         self.FILEinTag = False
         self.FILEinFileName = False
@@ -796,7 +796,7 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.Observable = True
                 self.skipLine = True
 
-            if  attrName in self.FILEkind:
+            if  attrName in self.FILE_PATTERN:
                 self.FILEin = True
                 self.Observable = True 
                 self.skipLine = True 

@@ -548,12 +548,10 @@ class AXIOMtoJSON:
 
 
 		for i, list_file_name in enumerate(listFileNames):
-			if (list_file_name.strip() == '') and \
-			 	(listFileUrls[i].strip() == ''):
-				pass
-			else:
-				# listFileUrls[i] will be stored in the property
-				# path of the FILE trace
+			if (list_file_name.strip() != '') or \
+			 	(listFileUrls[i].strip() != ''):
+#---	listFileUrls[i] will be stored in the property path of the FILE trace
+#			 	
 				fileUuid = self.__generateTraceFile(list_file_name, 
 				'', '', '', '', '', '', '', listFileUrls[i],
 				'', '', '', '', '', '', '', '')
@@ -666,9 +664,7 @@ class AXIOMtoJSON:
 #
 		EMAILtoList = EMAILidentifiersTO.split(',')
 		for i, email_to_list in enumerate(EMAILtoList):
-			if email_to_list.strip() == '':
-				pass
-			else:
+			if email_to_list.strip() != '':
 				if email_to_list.strip() in self.EMAILaddressList:
 					idx = self.EMAILaddressList.index(email_to_list.strip())
 					idTO = '{"@id":"' + self.EMAILaccountIdList[idx] + '"}'
@@ -685,9 +681,7 @@ class AXIOMtoJSON:
 		itemsCC = ''
 		EMAILtoList = EMAILidentifiersCC.split(',')
 		for i, email_to_list in enumerate(EMAILtoList):
-			if email_to_list.strip() == '':
-				pass
-			else:
+			if email_to_list.strip() != '':
 				if email_to_list.strip() in self.EMAILaddressList:
 					idx = self.EMAILaddressList.index(email_to_list.strip())
 					idCC = '{"@id":"' + self.EMAILaccountIdList[idx] + '"}'
@@ -707,9 +701,7 @@ class AXIOMtoJSON:
 		itemsBCC = ''
 		EMAILtoList = EMAILidentifiersBCC.split(',')
 		for i, email_to_list in enumerate(EMAILtoList):
-			if email_to_list.strip() == '':
-				pass
-			else:
+			if email_to_list.strip() != '':
 				if email_to_list.strip() in self.EMAILaddressList:
 					idx = self.EMAILaddressList.index(email_to_list.strip())
 					idBCC = '{"@id":"' + self.EMAILaccountIdList[idx] + '"}'
@@ -788,9 +780,7 @@ class AXIOMtoJSON:
 		self.__generateChainOfEvidence(EMAILsource, EMAILlocation, uuid)		
 
 		for i, email_attachment_file in enumerate(EMAILattachmentsFilename):
-			if email_attachment_file.strip() == '':
-				pass
-			else:
+			if email_attachment_file.strip() != '':
 				fileUuid = self.__generateTraceFile(email_attachment_file, 
 				'', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '')
 				self.__generateTraceRelation(fileUuid, uuid, 'Attached_To', 
@@ -1077,9 +1067,7 @@ class AXIOMtoJSON:
 	def writePhoneAccountFromContacts(self, CONTACTname, CONTACTphoneNums):
 		for i, contact_name in enumerate(CONTACTname):
 			CONTACTphoneNums[i] = CONTACTphoneNums[i].replace(' ', '')
-			if CONTACTphoneNums[i] in self.phoneNumberList:					
-				pass
-			else:
+			if CONTACTphoneNums[i] not in self.phoneNumberList:					
 				self.phoneNumberList.append(CONTACTphoneNums[i])
 				self.phoneNameList.append(contact_name)
 				mobileOperator = ""
@@ -1178,9 +1166,7 @@ class AXIOMtoJSON:
 								duration, status, outcome):
 
 		nTime = 0
-		if duration == "":
-			pass
-		else:
+		if duration != '':
 			aTime = duration.split(":")
 			if len(aTime) == 3:
 				nTime = aTime[0]*3600 + aTime[1]*60 + aTime[2] 
@@ -1679,9 +1665,7 @@ class AXIOMtoJSON:
 			else:
 				#phoneNum = CONTACTphoneNum[i].replace('+', '00')
 				phoneNum = CONTACTphoneNum[i].replace(' ', '')
-				if phoneNum in self.phoneNumberList:					
-						pass
-				else:
+				if phoneNum not in self.phoneNumberList:					
 					self.phoneNumberList.append(phoneNum)
 					self.phoneNameList.append(contact_name)
 					mobileOperator = ""
@@ -1834,9 +1818,7 @@ class AXIOMtoJSON:
 # 		generated, the ThreadMessage is not generated. Moreover the Chain of
 # 		evidence is built upon the ThreadUuid
 #				
-			if (len(self.CHATthread) == 0):
-				pass
-			else:
+			if (len(self.CHATthread) != 0):
 				uuidThread = self.__generateThreadMessages(self.CHATids[i][j], self.CHATthread, 
 								[CHATmsgFrom, CHATmsgTo])
 				self.__generateChainOfEvidence(CHATsource[i], CHATlocation[i], chatUuid)
