@@ -92,14 +92,12 @@ class AXIOMgadget():
                     Handler.CALLpartnerName, Handler.CALLsource, Handler.CALLlocation, 
                     Handler.CALLrecoveryMethod)
 
-#-- write SMS
-#
-        if self.reportType == 'mobile':
-            caseTrace.writeSms(Handler.SMSid, Handler.SMSsender,
-                    Handler.SMSrecipient, Handler.SMSreceivedDateTime, 
-                    Handler.SMSsentDateTime, 
-                    Handler.SMSmessage, Handler.SMSdirection, Handler.SMSsource, 
-                    Handler.SMSlocation, Handler.SMSrecoveryMethod)
+#-- write SMS: they may be present both in mobile and in disk
+#        
+        caseTrace.writeSms(Handler.SMSid, Handler.SMSsender,
+                Handler.SMSrecipient, Handler.SMSreceivedDateTime, 
+                Handler.SMSsentDateTime, Handler.SMSmessage, Handler.SMSdirection, 
+                Handler.SMSsource, Handler.SMSlocation, Handler.SMSrecoveryMethod)
 
 #---    write CHAT
 
@@ -198,7 +196,7 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.CALLlocationText = ''
         self.CALLrecoveyMethodText = ''
         self.CALLappNameText = ''
-        self.CALLphoneNumberDevice = ''
+        self.CALLphoneNumberDevice = 'DEVICE_PHONE_NUMBER'
         self.CALLphoneNameDevice = ''
 
         self.CALLtotal = 0
@@ -437,7 +435,7 @@ class ExtractTraces(xml.sax.ContentHandler):
 #       {SMS_PATH} = //Artifact[@name="Android MMS"]/Hits/Hit
 #       {SMS_PATH} = //Artifact[@name="iOS iMessage/SMS/MMS"]/Hits/Hit
 #    
-        self.SMS_PATTERN = ('Android SMS', 'iOS iMessage/SMS/MMS')
+        self.SMS_PATTERN = ('Android SMS', 'Android SMS/MMS', 'iOS iMessage/SMS/MMS')
         self.SMSin = False
         self.SMSinPartner = False
         self.SMSinRecipient = False
@@ -709,7 +707,7 @@ class ExtractTraces(xml.sax.ContentHandler):
     def __processSMS(self, attrFragment):
         if attrFragment == 'Partner':
             self.SMSinPartner = True
-        if attrFragment == 'Recipient':
+        if attrFragment in ('Recipient', 'Recipient(s)'):
             self.SMSinRecipient = True
         if attrFragment == 'Sender':
             self.SMSinSender = True
@@ -725,7 +723,7 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.SMSinSource = True
         if attrFragment == 'Location':
             self.SMSinLocation = True
-        if attrFragment == 'Recovery Method':
+        if attrFragment.lower() == 'recovery method':
             self.SMSinRecoveryMethod = True
 
     def __processWEB(self, attrFragment):
@@ -1354,12 +1352,12 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.SMSinPartner = False
 
         if self.SMSinRecipient:
-            self.SMSrecipient[self.SMStotal - 1] = self.SMSrecipientText        
-            self.SMSrecipientText = ''
+            self.SMSrecipient[self.SMStotal - 1] = self.SMSrecipientText                    
+            self.SMSrecipientText = ''            
             self.SMSinRecipient = False
 
         if self.SMSinSender:
-            self.SMSsender[self.SMStotal - 1] = self.SMSsenderText        
+            self.SMSsender[self.SMStotal - 1] = self.SMSsenderText
             self.SMSsenderText = ''
             self.SMSinSender = False
 
@@ -1374,7 +1372,7 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.SMSinSentDateTime = False
 
         if self.SMSinMessage:
-            self.SMSmessage[self.SMStotal - 1] = self.SMSmessageText        
+            self.SMSmessage[self.SMStotal - 1] = self.SMSmessageText                    
             self.SMSmessageText = ''
             self.SMSinMessage = False
 
@@ -1394,27 +1392,22 @@ class ExtractTraces(xml.sax.ContentHandler):
         if self.SMSinRecoveryMethod:
             self.SMSrecoveryMethod[self.SMStotal - 1] = self.SMSrecoveryMethodText
             self.SMSrecoveryMethodText = ''
-            self.SMSinRecoveryMethod = False
+            self.SMSinRecoveryMethod = False            
             
+#---    Android SMS includes the Partner element.
+#       iOS iMessage/SMS/MMS includes the Sender and Recipient(s) elements and the
+#       Incoming from Outgoing messages are identified by Received Date/time or Sent Date/Time                 only the Message Sent Date/Time is set, so in case
+#       elements           
+#            
             if self.SMSpartnerText != '':
-                if self.SMSdirectionText.lower() == 'incoming':                    
-                    self.SMSsender[self.SMStotal - 1] = self.SMSpartnerText
-                    self.SMSrecipient[self.SMStotal - 1] = self.CALLphoneNumberDevice
-                else:
+                if self.SMSdirectionText.lower() == 'outgoing':                    
                     self.SMSsender[self.SMStotal - 1] = self.CALLphoneNumberDevice
-                    self.SMSrecipient[self.SMStotal - 1] = self.SMSpartnerText
-                self.SMSpartnerText = ''
-            else:
-#---    for iOS iMessage/SMS/MMS only the Message Sent Date/Time is set, so in case
-#       the message has been received the Data value is referred to the receeiving Date
-#                
-                if self.SMSdirectionText.lower() == 'incoming':
-                    self.SMSreceivedDateTime[self.SMStotal - 1] = self.SMSsentDateTimeText
-                    self.SMSsentDateTime[self.SMStotal - 1] = ''
-                    self.SMSrecipient[self.SMStotal - 1] = 'Local user'
+                    self.SMSrecipient[self.SMStotal - 1] = self.SMSpartnerText                    
                 else:
-                    self.SMSsender[self.SMStotal - 1] = 'Local user'
-                self.SMSdirectionText = ''
+                    self.SMSsender[self.SMStotal - 1] = self.SMSpartnerText
+                    self.SMSrecipient[self.SMStotal - 1] = self.CALLphoneNumberDevice                    
+                self.SMSpartnerText = ''
+                self.SMSdirectionText = ''                
 
     def __endElementFragmentWEB(self):
         if self.WEBinUrl:
@@ -1535,8 +1528,8 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.CALLrecoveyMethodText += ch
 
         if self.CALL_PHONE_NUM_DEVICE_VALUEin:            
-            if self.CALLphoneNumberDevice == '':
-                self.CALLphoneNumberDevice += ch
+            if self.CALLphoneNumberDevice == 'DEVICE_PHONE_NUMBER':
+                self.CALLphoneNumberDevice = ch
 
         if self.CALL_PHONE_NAME_DEVICE_VALUEin:            
             self.CALLphoneNameDevice += ch

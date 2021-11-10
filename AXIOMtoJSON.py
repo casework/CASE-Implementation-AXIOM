@@ -187,7 +187,6 @@ class AXIOMtoJSON:
 #---	the xsd:dateTime has the structure YYYY-MM-DDTHH:MM:SS (UTCxxx)
 #		the character "/" is not allowed
 #		
-		#print(f'*DEBUG* before replacing, dateTime: {initialDate}')
 		initialDate = initialDate.replace("/", "-")
 		initialDate = initialDate.replace(' ', 'T', 1)
 		initialDate = initialDate.replace('UTC', '')						
@@ -239,10 +238,6 @@ class AXIOMtoJSON:
 		if re.search('T\d{2}:\d{2}:\d{2}(.+)$', initialDate):
 			initialDate = re.sub('(T\d{2}:\d{2}:\d{2})(.+)$', '\g<1>', initialDate)
 			
-
-		#print(f'*DEBUG* after replacing, dateTime: {initialDate}')
-		
-
 
 		return initialDate.strip()
 
@@ -860,7 +855,9 @@ class AXIOMtoJSON:
 		path = FILEpath.replace('\\', '/')
 		path = path.replace('"', "'")
 		dotPos = tail.find('.')
-		sExt = tail[dotPos:]
+		sExt = ''
+		if dotPos > -1:
+			sExt = tail[dotPos:]
 		
 		if FILEHashValue.upper() == 'N/A':
 			FILEHashValue = '0';
@@ -965,7 +962,8 @@ class AXIOMtoJSON:
 #			
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:fileLocalPath":"' + localPath + '",\n', \
 		
-			AXIOMtoJSON.C_TAB*2 + '"uco-observable:extension":"' + FILEextension + '",\n', \
+			#AXIOMtoJSON.C_TAB*2 + '"uco-observable:extension":"' + FILEextension + '",\n', \
+			AXIOMtoJSON.C_TAB*2 + '"uco-observable:extension":"' + sExt + '",\n', \
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:fileSystemType":"userdata (ExtX)",\n', \
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:isDirectory":false,\n', \
 			AXIOMtoJSON.C_TAB*2 + '"uco-observable:sizeInBytes": {\n',\
@@ -1010,6 +1008,8 @@ class AXIOMtoJSON:
 		FILElocation):
 		
 		uuid = "kb:" + AXIOMtoJSON.__createUUID()
+		FILEsysType = self.__cleanString(FILEsysType)
+
 		line = '{ \n'
 		line += AXIOMtoJSON.C_TAB + '"@id":"' +  uuid + '", \n'
 		line += AXIOMtoJSON.C_TAB + '"@type":"uco-observable:ObservableObject",\n'
@@ -1669,7 +1669,6 @@ class AXIOMtoJSON:
 					self.phoneNumberList.append(phoneNum)
 					self.phoneNameList.append(contact_name)
 					mobileOperator = ""
-					#print(f'in ObservableRelationship, phoneNum={phoneNum}')
 					uuid = self.generateTracePhoneAccount(mobileOperator, contact_name, phoneNum)
 					self.phoneUuidList.append(uuid)
 
@@ -1875,7 +1874,6 @@ class AXIOMtoJSON:
 				self.phoneNameList.append(senderName)
 				mobileOperator = ""		
 				SMSsenderClean = self.__cleanString(SMSsenderClean)
-				#print(f'in writeSMS, SMSsenderClean={SMSsenderClean}')
 				phoneParticipantUuid = self.generateTracePhoneAccount(mobileOperator, 
 					senderName, SMSsenderClean)	
 				self.phoneUuidList.append(phoneParticipantUuid)
@@ -1894,7 +1892,6 @@ class AXIOMtoJSON:
 				self.phoneNameList.append(recipientName)
 				mobileOperator = ""
 				SMSrecipientClean = self.__cleanString(SMSrecipientClean)
-				#print(f'in writeSMS, SMSrecipientClean={SMSrecipientClean}')
 				phoneRecipientUuid = self.generateTracePhoneAccount(mobileOperator, 
 					recipientName, SMSrecipientClean)	
 				self.phoneUuidList.append(phoneRecipientUuid)
