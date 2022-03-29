@@ -9,15 +9,38 @@ import os
 import codecs
 import AXIOMtoJSON as CJ
 import re
-import sys
 import timeit
+import sys
+from time import localtime, strftime
+# import logging
+
 
 class AXIOMgadget():
-    def __init__(self, xmlReport, jsonCASE, reportType, baseLocalPath):    
+    def __init__(self, xmlReport, jsonCASE, reportType, baseLocalPath, verbose=False):
         self.xmlReport = xmlReport
         self.jsonCASE = jsonCASE
         self.reportType = reportType
         self.baseLocalPath = os.path.join(baseLocalPath,  'Attachments')
+        self.tic_start = timeit.default_timer()
+        self.verbose = verbose
+        # logging.basicConfig(filename='_axiom_log.txt', level=logging.INFO,
+        #     filemode='w', format='%(asctime)s - %(levelname)s - %(message)s')
+        # # #logging.basicConfig(filename='_ufed_log.txt', level=logging.INFO,
+        #    filemode='w', format='%(message)s')
+
+    def show_elapsed_time(self, tic, message):
+        toc = timeit.default_timer()
+        C_CYAN = '\033[36m'
+        C_BLACK = '\033[0m'
+        elapsed_seconds = round(toc - tic, 2)
+        (ss, ms) = divmod(elapsed_seconds, 1)
+        elapsedMm = str(int(ss) // 60)
+        elapsedSs = str(int(ss) % 60)
+        elapsedMs = str(round(ms, 2))[2:]
+        elapsed_time = elapsedMm + ' min. ' +  elapsedSs + ' sec. and ' + \
+            elapsedMs + ' hundredths'
+        if self.verbose:
+            print('\n' + C_CYAN + 'elapsed time - ' + message + ': ' + elapsed_time + '\n' + C_BLACK)
 
     def processXmlReport(self):
 
@@ -27,7 +50,7 @@ class AXIOMgadget():
 
 #---    override the default ContextHandler
 #    
-        Handler = ExtractTraces(self.baseLocalPath)
+        Handler = ExtractTraces(self.baseLocalPath, self.verbose)
 
         Handler.createOutFile(self.jsonCASE)
 
@@ -35,19 +58,25 @@ class AXIOMgadget():
    
         SAXparser.parse(self.xmlReport)
 
-        print(Handler.C_cyan + '\n\n\CASE is being generated...' + Handler.C_end)
+        self.show_elapsed_time(self.tic_start, 'Extraction Traces')
+
+        if self.verbose:
+            print('\n\n\nCASE JSON-LD file is being generated ...')
+        
+        tic_case_start = timeit.default_timer()
 
         if self.reportType == 'mobile':
-            print(Handler.C_cyan + "owner's phone number / name: " + 
-                Handler.CALLphoneNumberDevice + ' / ' + Handler.CALLphoneNameDevice + 
-                '\n' + Handler.C_end)
+            if self.verbose:
+                print(Handler.C_cyan + "owner's phone number / name: " + 
+                    Handler.CALLphoneNumberDevice + ' / ' + Handler.CALLphoneNameDevice + 
+                    '\n' + Handler.C_end)
 
 
 #---    create object and open JSON file and define the boolean value that
 #       indicates if the line with comma plus return must be written before
 #       writing the next ObservableObject   
 #
-        caseTrace = CJ.AXIOMtoJSON(Handler.fOut, False)
+        caseTrace = CJ.AXIOMtoJSON(Handler.fOut)
 
 
 #---    write CASE @context, version and description JSON file
@@ -58,8 +87,20 @@ class AXIOMgadget():
 #---    write phoneAccountFacet for the device phone number
 #
         if self.reportType == 'mobile':
+            caseTrace.writeDeviceMobile(Handler.DEVICEidText, Handler.DEVICEimsiText,
+                Handler.DEVICEbluetoothAddressText, Handler.DEVICEbluetoothNameText, 
+                Handler.DEVICEimeiText, Handler.DEVICEserialNumberText, 
+                Handler.DEVICEnameText, Handler.DEVICEmodelText, Handler.DEVICEiccidText, 
+                Handler.DEVICEosVersionText)
             caseTrace.writePhoneOwner(Handler.CALLphoneNumberDevice, 
                 Handler.CALLphoneNameDevice)
+            caseTrace.writePhoneAccountFromContacts(Handler.CONTACTname, 
+                Handler.CONTACTphoneNumber)
+        else:
+            caseTrace.writeDeviceDisk(Handler.FILE_SYS_INFOvolumeSn, 
+                Handler.FILE_SYS_INFOfileSystem, Handler.FILE_SYS_INFOcapacity,
+                Handler.FILE_SYS_INFOunallocated, Handler.FILE_SYS_INFOallocated,
+                Handler.FILE_SYS_INFOoffset)
 
         caseTrace.writeFiles(Handler.FILEid, Handler.FILEtag, Handler.FILEfileName,
                 Handler.FILEfileLocalPath, Handler.FILEimage, Handler.FILEfileSize,
@@ -68,38 +109,34 @@ class AXIOMgadget():
                 Handler.FILEexifLatitudeRef, Handler.FILEexifLatitude, 
                 Handler.FILEexifLongitudeRef, Handler.FILEexifLongitude, Handler.FILEexifAltitude,
                 Handler.FILEsource, Handler.FILElocation, 
-                Handler.FILErecoveryMethod)
+                Handler.FILErecoveryMethod)            
 
-
-#---    write PhoneAccountFacet relying on CONTACT
-#       CONTACTname is a list of names of contacts, 
-#       CONTACTphoneNums is a list of list of phone numbers, each item represents 
-#       the list of phone numbers of a contact. So a contact is identified by 
-#       the item CONTACname[i] and this contact may have many phone numbers 
-#       identified by CONTACTphoneNums[i][j] iterating on the index j
-#       The writeContacts method must be invoked before the processing of
-#       the SMS and Call traces, both of them are based on the list of phone numbers
-
-        if self.reportType == 'mobile':    
-            caseTrace.writePhoneAccountFromContacts(Handler.CONTACTname, 
-                Handler.CONTACTphoneNumber)
-
-#---    write  CALL
-#       
         if self.reportType == 'mobile':
             caseTrace.writeCall(Handler.CALLid, Handler.CALLappName, Handler.CALLtimeStamp, 
                     Handler.CALLdirection, Handler.CALLduration, Handler.CALLpartner, 
                     Handler.CALLpartnerName, Handler.CALLsource, Handler.CALLlocation, 
                     Handler.CALLrecoveryMethod)
+            caseTrace.writeCell_Tower(Handler.CELL_TOWERid, Handler.CELL_TOWERmcc,
+                Handler.CELL_TOWERmnc, Handler.CELL_TOWERlac, Handler.CELL_TOWERcid, 
+                Handler.CELL_TOWERlongitude,Handler.CELL_TOWERlatitude,
+                Handler.CELL_TOWERtimeStamp,  Handler.CELL_TOWERsource, 
+                Handler.CELL_TOWERlocation, Handler.CELL_TOWERrecoveryMethod)
 
-#-- write SMS: they may be present both in mobile and in disk
-#        
+            caseTrace.writeWireless_Net(Handler.WIRELESS_NETid, Handler.WIRELESS_NETmacAddress,
+                Handler.WIRELESS_NETchannel, Handler.WIRELESS_NETlongitude, 
+                Handler.WIRELESS_NETlatitude, Handler.WIRELESS_NETtimeStamp,  
+                Handler.WIRELESS_NETaccuracy, Handler.WIRELESS_NETsource, 
+                Handler.WIRELESS_NETlocation, Handler.WIRELESS_NETrecoveryMethod)
+        
+        caseTrace.writeSearched_Item(Handler.SEARCHED_ITEMid, Handler.SEARCHED_ITEMvalue,
+                Handler.SEARCHED_ITEMtimeStamp, Handler.SEARCHED_ITEMappSource, 
+                Handler.SEARCHED_ITEMsource, Handler.SEARCHED_ITEMlocation, 
+                Handler.SEARCHED_ITEMrecoveryMethod)
+
         caseTrace.writeSms(Handler.SMSid, Handler.SMSsender,
                 Handler.SMSrecipient, Handler.SMSreceivedDateTime, 
                 Handler.SMSsentDateTime, Handler.SMSmessage, Handler.SMSdirection, 
                 Handler.SMSsource, Handler.SMSlocation, Handler.SMSrecoveryMethod)
-
-#---    write CHAT
 
         caseTrace.writeChat(Handler.CHATid, Handler.CHATsender, Handler.CHATreceiver, 
                         Handler.CHATdateTimeSent, Handler.CHATdateTimeReceived, 
@@ -107,29 +144,35 @@ class AXIOMgadget():
                         Handler.CHATapplication, Handler.CHATsource,
                         Handler.CHATlocation, Handler.CHATrecoveryMethod)
 
+        caseTrace.writeCookie(Handler.COOKIEid, Handler.COOKIEappSource, Handler.COOKIEname, 
+                        Handler.COOKIEpath, Handler.COOKIEdomain, Handler.COOKIEcreatedDate, 
+                        Handler.COOKIEaccessedDate, Handler.COOKIEexpirationDate, 
+                        Handler.COOKIEsource, Handler.COOKIElocation, Handler.COOKIErecoveryMethod)
+
         caseTrace.writeEmail(Handler.EMAILid, Handler.EMAILappSource, Handler.EMAILsender, 
                         Handler.EMAILrecipient, Handler.EMAILcc, Handler.EMAILbcc, 
                         Handler.EMAILbody, Handler.EMAILsubject, Handler.EMAILdateTime, 
                         Handler.EMAILattachment, Handler.EMAILsource, 
-                        Handler.EMAILlocation, Handler.EMAILrecoveryMethod)
+                        Handler.EMAILlocation, Handler.EMAILrecoveryMethod)        
 
-#---    all parameters are lists containing data of the extracted WEB_PAGE
-#
+        caseTrace.writeWinTimeline(Handler.WIN_TIMELINEid, Handler.WIN_TIMELINEappName, 
+                       Handler.WIN_TIMELINEactivityType, Handler.WIN_TIMELINEtimeStamp, 
+                       Handler.WIN_TIMELINEsource, Handler.WIN_TIMELINElocation, 
+                       Handler.WIN_TIMELINErecoveryMethod)
+
+        caseTrace.writeLocationDevice(Handler.LOCATIONid, Handler.LOCATIONtype, 
+            Handler.LOCATIONlatitude, Handler.LOCATIONlongitude, Handler.LOCATIONcreated,
+            Handler.LOCATIONsource, Handler.LOCATIONlocation) 
+
         caseTrace.writeWebPages(Handler.WEBid, Handler.WEBappSource, 
                        Handler.WEBurl, Handler.WEBtitle, Handler.WEBvisitCount,
                        Handler.WEBlastVisited, Handler.WEBsource, 
                         Handler.WEBlocation, Handler.WEBrecoveryMethod)
 
-#---    Write the context info: Device info, only, the other data such as
-#       Forensic tool info, Acquisition/Extraction investigative Actions, Peformer,
-#       are not included in the AXIOM XML report
+#--- JSON final line
 #
-        caseTrace.generateTraceDevice('', Handler.DEVICEserialNumberText,  
-            Handler.DEVICEnameText, '', '', '', '', '', '', '', '')
-
-# this write a single line to complete the JSON output file
-
         caseTrace.writeLastLine()
+        self.show_elapsed_time(tic_case_start, 'Generation CASE JSON-LD file')
         Handler.fOut.close()
 
         return Handler
@@ -137,12 +180,12 @@ class AXIOMgadget():
 
 class ExtractTraces(xml.sax.ContentHandler):
 
-    def __init__(self, baseLocalPath):
+    def __init__(self, baseLocalPath, verbose):
         self.fOut = ''
         self.lineXML = 0
 
         self.skipLine = False
-
+        self.verbose = verbose
         self.inHit = False
         self.Observable = False
         self.C_green  = '\033[32m'
@@ -152,27 +195,40 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.C_end = '\033[0m'
 
 
-#---    DEVICE INFO  section - XPath
-#       {CALL_PATH} = //Artifact[@name="File System Information"]/Hits/Hit
-#       /Fragment[@name="Volume Serial Number"] and Fragment[@name="Source"]
+#---    DEVICE INFO
 #
+        self.DEVICE_PATTERN = ('Android Device Information', 'iOS Device Information')
         self.DEVICEin = False
         self.DEVICEinSerialNumber = False
-        self.DEVICEinName = False        
+        self.DEVICEinId = False
+        self.DEVICEinName = False
+        self.DEVICEinImsi = False
+        self.DEVICEinBluetoothAddress = False
+        self.DEVICEinBluetoothName = False
+        self.DEVICEinImei = False
+        self.DEVICEinIccid = False
+        self.DEVICEinModel = False
+        self.DEVICEinOsVersion = False
+
         self.DEVICEserialNumberText = ''
+        self.DEVICEidText = ''
         self.DEVICEnameText = ''
+        self.DEVICEimsiText = ''
+        self.DEVICEimeiText = ''
+        self.DEVICEbluetoothAddressText = ''
+        self.DEVICEbluetoothNameText = ''
+        self.DEVICEmodelText = ''
+        self.DEVICEiccidText = ''
+        self.DEVICEosVersionText = ''
 
 
-#---    CALL  section - XPath
-#       {CALL_PATH} = //Artifact[@name="Android Call Logs"]/Hits/Hit
-#       {CALL_PATH} = //Artifact[@name="iOS Call Logs"]/Hits/Hit
+#---    CALL  section
 #
         self.CALL_PATTERN = ('Android Call Logs', 'iOS Call Logs')
         self.CALLin = False
         self.CALLinPartner = False
         self.CALLinPartnerName = False
         self.CALLinDirection = False
-        #self.CALLinCallStatus = False
         self.CALLinTimeStamp = False
         self.CALLinDuration = False
         self.CALLinSource = False
@@ -211,18 +267,53 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.CALLlocation = []
         self.CALLrecoveryMethod = []
 
-#---    CHAT  section - XPath
-#       {CHAT_PATH} = //Artifact[@name="Android WhatsApp Messages"]/Hits/Hit
-#       {CALL_PATH} = //Artifact[@name="iOS Call Logs"]/Hits/Hit
-#       {CALL_PATH} = //Artifact[@name="Skype Chat Messages"]/Hits/Hit
-#       {CALL_PATH} = //Artifact[@name="Skype Chatsync Messages"]/Hits/Hit
-#       {CALL_PATH} = //Artifact name="Android Telegram Messages">
-#       {CALL_PATH} = //Artifact name="Snapchat Chat Messages">
+#---    The CELL TOWER Artifact
+#        
+        self.CELL_TOWER_PATTERN = ('Cell Tower Locations')
+        self.CELL_TOWERin = False
+        self.CELL_TOWERinCID= False
+        self.CELL_TOWERinLAC= False
+        self.CELL_TOWERinMCC= False
+        self.CELL_TOWERinMNC = False
+        self.CELL_TOWERinTimeStamp = False
+        self.CELL_TOWERinLatitude = False
+        self.CELL_TOWERinLongitude = False
+        self.CELL_TOWERinSource = False
+        self.CELL_TOWERinLocation = False
+        self.CELL_TOWERinRecoveryMethod = False
+
+        self.CELL_TOWERmccText = ''
+        self.CELL_TOWERmncText = ''
+        self.CELL_TOWERlacText = ''
+        self.CELL_TOWERcidText = ''
+        self.CELL_TOWERlongitudeText = ''
+        self.CELL_TOWERlatitudeText = ''
+        self.CELL_TOWERtimeStampText = ''
+        self.CELL_TOWERsourceText =  ''
+        self.CELL_TOWERlocationText = ''
+        self.CELL_TOWERrecoveryMethodText = ''
+
+        self.CELL_TOWERtotal = 0
+        self.CELL_TOWERid = []
+        self.CELL_TOWERlongitude = []
+        self.CELL_TOWERlatitude = []
+        self.CELL_TOWERtimeStamp = []
+        self.CELL_TOWERmcc = []
+        self.CELL_TOWERmnc = []
+        self.CELL_TOWERlac = []
+        self.CELL_TOWERcid = []
+        self.CELL_TOWERsource = []
+        self.CELL_TOWERlocation = []
+        self.CELL_TOWERrecoveryMethod = []
+
+
+#---    CHAT  section
 #
         self.CHAT_PATTERN = ('Android WhatsApp Messages', 'iOS WhatsApp Messages',
-                'Android Telegram Messages', 'iOS Telegram Messages', 
-                'Snapchat Chat Messages', 'TikTok Messages', 'Instagram Direct Messages',
-                'Signal Messages', 'Signal Messages - iOS', 'Facebook Messenger Messages')
+            'Android Telegram Messages', 'iOS Telegram Messages', 'iOS Telegram Chats', 
+            'Snapchat Chat Messages', 'TikTok Messages', 'Instagram Direct Messages',
+            'Signal Messages', 'Signal Messages - Windows', 'Signal Messages - iOS', 
+            'Facebook Messenger Messages')
         self.CHATin = False
         self.CHATinSender = False
         self.CHATinReceiver = False
@@ -234,7 +325,7 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.CHATinLocation = False
         self.CHATinRecoveryMethod = False
 
-#---    Chat Telegram: fields are different from Whatsapp
+#---    CHAT Telegram: fields are different from Whatsapp
 #        
         self.CHATinPartner = False
         self.CHATinDateTime = False
@@ -288,15 +379,19 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.CHATlocations = []
         self.CHATrecoveryMethods = []
 
-        self.CONTACTtrace = 'contact'
+        self.CONTACT_PATTERN = ('Android Contacts', 'Apple Contacts - iOS')
         self.CONTACTin = False
         self.CONTACTinName = False
+        self.CONTACTinFirstName = False
+        self.CONTACTinLastName = False
         self.CONTACTinPhoneNumber = False
         self.CONTACTinSource = False
         self.CONTACTinLocation = False
         self.CONTACTinRecoveryMethod = False
 
         self.CONTACTnameText = ''
+        self.CONTACTfirstNameText = ''
+        self.CONTACTlastNameText = ''
         self.CONTACTphoneNumberText = ''
         self.CONTACTsourceText =  ''
         self.CONTACTlocationText = ''
@@ -310,12 +405,47 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.CONTACTlocation = []
         self.CONTACTrecoveryMethod = []
 
-#---    The Artifacts extracted are: Android Emails, Gmail Emails, Apple Email,
-#       Android Yahoo Mail Emails.
-#       Not yet extracted: Outlook Emails
+#---    The Artifacts extracted are: Chrome Cookies, 
+#        
+        self.COOKIE_PATTERN = ('Chrome Cookies', 'Edge Chromium Cookies', 'Firefox Cookies')
+        self.COOKIEin = False
+        self.COOKIEinName= False
+        self.COOKIEinPath= False
+        self.COOKIEinDomain = False
+        self.COOKIEinCreatedDate = False
+        self.COOKIEinAccessedDate = False
+        self.COOKIEinExpirationDate = False
+        self.COOKIEinSource = False
+        self.COOKIEinLocation = False
+        self.COOKIEinRecoveryMethod = False
+
+        self.COOKIEappSourceText = ''
+        self.COOKIEnameText = ''
+        self.COOKIEpathText = ''
+        self.COOKIEdomainText = ''
+        self.COOKIEcreatedDateText = ''
+        self.COOKIEaccessedDateText = ''
+        self.COOKIEexpirationDateText = ''
+        self.COOKIEsourceText =  ''
+        self.COOKIElocationText = ''
+        self.COOKIErecoveryMethodText = ''
+
+        self.COOKIEtotal = 0
+        self.COOKIEid = []
+        self.COOKIEappSource = []
+        self.COOKIEname = []
+        self.COOKIEpath = []
+        self.COOKIEdomain = []        
+        self.COOKIEcreatedDate = []
+        self.COOKIEaccessedDate = []
+        self.COOKIEexpirationDate = []
+        self.COOKIEsource = []
+        self.COOKIElocation = []
+        self.COOKIErecoveryMethod = []
+
+#---    EMAIL Artifacts, not yet extracted: Outlook Emails
 #        
         self.EMAIL_PATTERN = ('Apple Mail', 'Gmail Emails', 'Android Emails')
-        self.EMAILtrace = 'email'
         self.EMAILin = False
         self.EMAILinSender= False
         self.EMAILinRecipients= False
@@ -357,13 +487,12 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.EMAILlocation = []
         self.EMAILrecoveryMethod = []
 
-#---    FILE  section - XPath
-#       {FILE_PATH} = //Artifact[@name="Pictures"]/Hits/Hit
+#---    FILE  Artifacts
 #
         self.FILE_PATTERN =('Pictures', 'Videos', 'RTF Documents', 'Excel Documents',
                 'PowerPoint Documents', 'Audio', 'PDF Documents', 'Word Documents', 
                 'WordPerfect Files', 'Calc Documents', 'Writer Documents', 'Text Documents',
-                'CSV Documents')
+                'CSV Documents', 'Live Photos', 'TikTok Videos')
         self.FILEin = False
         self.FILEinTag = False
         self.FILEinFileName = False
@@ -430,10 +559,94 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.FILElocation = []
         self.FILErecoveryMethod = []
 
-#---    SMS  section - XPath
-#       {SMS_PATH} = //Artifact[@name="Android SMS"]/Hits/Hit
-#       {SMS_PATH} = //Artifact[@name="Android MMS"]/Hits/Hit
-#       {SMS_PATH} = //Artifact[@name="iOS iMessage/SMS/MMS"]/Hits/Hit
+#---    FILE SYSTEM INFORMATION section (only for HD, USB, etc.)
+#
+        self.FILE_SYS_INFO_PATTERN = ('File System Information')
+        self.FILE_SYS_INFOin = False
+        self.FILE_SYS_INFOinVolumeSn = False
+        self.FILE_SYS_INFOinFileSystem = False
+        self.FILE_SYS_INFOinCapacity = False
+        self.FILE_SYS_INFOinUnallocated = False
+        self.FILE_SYS_INFOinAllocated = False
+        self.FILE_SYS_INFOinOffest = False
+
+        self.FILE_SYS_INFOvolumeSnText = ''
+        self.FILE_SYS_INFOfileSystemText = ''
+        self.FILE_SYS_INFOcapacityText = ''
+        self.FILE_SYS_INFOunallocatedText = ''
+        self.FILE_SYS_INFOallocatedText = ''
+        self.FILE_SYS_INFOoffsetText = ''
+        
+        self.FILE_SYS_INFOtotal = 0
+        self.FILE_SYS_INFOid = []
+        self.FILE_SYS_INFOvolumeSn = []
+        self.FILE_SYS_INFOfileSystem  = []
+        self.FILE_SYS_INFOcapacity = []
+        self.FILE_SYS_INFOunallocated = []
+        self.FILE_SYS_INFOallocated = []
+        self.FILE_SYS_INFOoffset = []
+
+#---    Signficant Location (Location Device)
+#                
+        self.LOCATION_PATTERN = ('Significant Locations')
+        self.LOCATIONin = False
+        self.LOCATIONinType = False
+        self.LOCATIONinCreated = False
+        self.LOCATIONinLongitude = False
+        self.LOCATIONinLatitude = False
+        self.LOCATIONinSource = False
+        self.LOCATIONinLocation = False
+        self.LOCATIONinRecoveryMethod = False
+
+        self.LOCATIONtotal = 0
+        self.LOCATIONtypeText = ''
+        self.LOCATIONcreatedText = ''
+        self.LOCATIONlongitudeText = ''
+        self.LOCATIONlatitudeText = ''
+        self.LOCATIONsourceText =  ''
+        self.LOCATIONlocationText = ''
+        self.LOCATIONrecoveryMethodText = ''
+        self.LOCATIONartifact = ''
+
+        self.LOCATIONid = []
+        self.LOCATIONtype = []
+        self.LOCATIONcreated = []
+        self.LOCATIONlongitude = []
+        self.LOCATIONlatitude = []
+        self.LOCATIONsource = []
+        self.LOCATIONlocation = []
+        self.LOCATIONrecoveryMethod = []
+
+#---    Searched Item Artifacts 
+#                
+        self.SEARCHED_ITEM_PATTERN = ('Parsed Search Queries', 'Google Searches', 
+        'iOS Safari Recent Search Terms', 'Chrome Keyword Search Terms')
+        self.SEARCHED_ITEMin = False
+        self.SEARCHED_ITEMinAppSource = False
+        self.SEARCHED_ITEMinTimeStamp = False
+        self.SEARCHED_ITEMinValue = False
+        self.SEARCHED_ITEMinSource = False
+        self.SEARCHED_ITEMinLocation = False
+        self.SEARCHED_ITEMinRecoveryMethod = False
+
+        self.SEARCHED_ITEMtotal = 0
+        self.SEARCHED_ITEMappSourceText = ''
+        self.SEARCHED_ITEMtimeStampText = ''
+        self.SEARCHED_ITEMvalueText = ''
+        self.SEARCHED_ITEMsourceText =  ''
+        self.SEARCHED_ITEMlocationText = ''
+        self.SEARCHED_ITEMrecoveryMethodText = ''
+        self.SEARCHED_ITEMartifact = ''
+
+        self.SEARCHED_ITEMid = []
+        self.SEARCHED_ITEMappSource = []
+        self.SEARCHED_ITEMtimeStamp = []
+        self.SEARCHED_ITEMvalue = []
+        self.SEARCHED_ITEMsource = []
+        self.SEARCHED_ITEMlocation = []
+        self.SEARCHED_ITEMrecoveryMethod = []
+
+#---    SMS  Artifacts
 #    
         self.SMS_PATTERN = ('Android SMS', 'Android SMS/MMS', 'iOS iMessage/SMS/MMS')
         self.SMSin = False
@@ -471,14 +684,10 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.SMSlocation = []
         self.SMSrecoveryMethod = []
 
-#---    WEB_HISTORY  section - XPath
-#       {WEB_HISTORY_PATH} = //Artifact[@name="Chrome Web History"]/Hits/Hit
-#       {WEB_HISTORY_PATH} = //Artifact[@name="Safari History"]/Hits/Hit
-#       {WEB_HISTORY_PATH} = //Artifact[@name="Firefox Web History"]/Hits/Hit 
-#       {WEB_HISTORY_PATH} = //Artifact[@name="Edge/Internet Explorer 10-11 Main History"]/Hits/Hit         
+#---    WEB_HISTORY  Artifacts
 #    
         self.WEB_PATTERN = ('Chrome Web History', 'Safari History', 'Firefox Web History',
-                'Samsung Browser Web History')
+                'Samsung Browser Web History', 'Edge Chromium Web History')
         self.WEBin = False
         self.WEBinUrl = False
         self.WEBinLastVisited = False
@@ -508,6 +717,70 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.WEBlocation = []
         self.WEBrecoveryMethod = []
 
+#---    Wireless Network Artifact
+#        
+        self.WIRELESS_NET_PATTERN = ('WiFi Locations')
+        self.WIRELESS_NETin = False
+        self.WIRELESS_NETinMacAaddress= False
+        self.WIRELESS_NETinChannel= False
+        self.WIRELESS_NETinTimeStamp = False
+        self.WIRELESS_NETinLatitude = False
+        self.WIRELESS_NETinLongitude = False
+        self.WIRELESS_NETinAccuracy = False
+        self.WIRELESS_NETinSource = False
+        self.WIRELESS_NETinLocation = False
+        self.WIRELESS_NETinRecoveryMethod = False
+
+        self.WIRELESS_NETmacAddressText = ''
+        self.WIRELESS_NETchannelText = ''
+        self.WIRELESS_NETtimeStampText = ''
+        self.WIRELESS_NETlongitudeText = ''
+        self.WIRELESS_NETlatitudeText = ''
+        self.WIRELESS_NETaccuracyText = ''
+        self.WIRELESS_NETsourceText =  ''
+        self.WIRELESS_NETlocationText = ''
+        self.WIRELESS_NETrecoveryMethodText = ''
+
+        self.WIRELESS_NETtotal = 0
+        self.WIRELESS_NETid = []
+        self.WIRELESS_NETmacAddress = []
+        self.WIRELESS_NETchannel = []
+        self.WIRELESS_NETtimeStamp = []
+        self.WIRELESS_NETlongitude = []
+        self.WIRELESS_NETlatitude = []
+        self.WIRELESS_NETaccuracy = []
+        self.WIRELESS_NETsource = []
+        self.WIRELESS_NETlocation = []
+        self.WIRELESS_NETrecoveryMethod = []
+
+#---    Windows Timeline Activity Artifact, represented in CASE with the 
+#       class uco-observable:EventFacet
+#               
+        self.WIN_TIMELINE_PATTERN = ('Windows Timeline Activity')
+        self.WIN_TIMELINEin = False
+        self.WIN_TIMELINEinAppName = False
+        self.WIN_TIMELINEinActivityType = False
+        self.WIN_TIMELINEinTimeStamp = False
+        self.WIN_TIMELINEinSource = False
+        self.WIN_TIMELINEinLocation = False
+        self.WIN_TIMELINEinRecoveryMethod = False
+
+        self.WIN_TIMELINEtotal = 0
+        self.WIN_TIMELINEappNameText = ''
+        self.WIN_TIMELINEactivityTypeText = ''
+        self.WIN_TIMELINEtimeStampText = ''
+        self.WIN_TIMELINEsourceText =  ''
+        self.WIN_TIMELINElocationText = ''
+        self.WIN_TIMELINErecoveryMethodText = ''
+
+        self.WIN_TIMELINEid = []
+        self.WIN_TIMELINEappName = []
+        self.WIN_TIMELINEactivityType = []
+        self.WIN_TIMELINEtimeStamp = []
+        self.WIN_TIMELINEsource = []
+        self.WIN_TIMELINElocation = []
+        self.WIN_TIMELINErecoveryMethod = []        
+
         self.CONTEXTimagePath = []
         self.CONTEXTimageSize = []
         self.CONTEXTimageMetadataHashSHA = []
@@ -518,43 +791,372 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.fOut = codecs.open(filename, 'w', encoding='utf8')
 
     
-    def __processPHONE_NUM(self, attrFragment):
+    def __charactersCALL(self, ch):
+        if self.CALLinPartner:
+            self.CALLpartnerText += ch
+        elif self.CALLinPartnerName:
+            self.CALLpartnerNameText += ch
+        elif self.CALLinDirection:
+            self.CALLdirectionText += ch
+        elif self.CALLinTimeStamp:
+            self.CALLtimeStampText += ch
+        elif self.CALLinDuration:
+            self.CALLdurationText += ch
+        elif self.CALLinSource:
+            self.CALLsourceText += ch
+        elif self.CALLinLocation:
+            self.CALLlocationText += ch
+        elif self.CALLinRecoveryMethod:
+            self.CALLrecoveyMethodText += ch 
+
+    def __charactersCELL_TOWER(self, ch):
+        if self.CELL_TOWERinCID:
+            self.CELL_TOWERcidText += ch
+        elif self.CELL_TOWERinLAC:
+            self.CELL_TOWERlacText += ch
+        elif self.CELL_TOWERinMCC:
+            self.CELL_TOWERmccText += ch
+        elif self.CELL_TOWERinMNC:
+            self.CELL_TOWERmncText += ch
+        elif self.CELL_TOWERinTimeStamp:
+            self.CELL_TOWERtimeStampText += ch
+        elif self.CELL_TOWERinLatitude:
+            self.CELL_TOWERlatitudeText += ch
+        elif self.CELL_TOWERinLongitude:
+            self.CELL_TOWERlongitudeText += ch
+        elif self.CELL_TOWERinSource:
+            self.CELL_TOWERsourceText += ch
+        elif self.CELL_TOWERinLocation:
+            self.CELL_TOWERlocationText += ch
+        elif self.CELL_TOWERinRecoveryMethod:
+            self.CELL_TOWERrecoveryMethodText += ch
+    
+    def __charactersCONTACT(self, ch):
+        if self.CONTACTinName:
+            self.CONTACTnameText += ch
+        elif self.CONTACTinFirstName:
+            self.CONTACTfirstNameText += ch
+        elif self.CONTACTinLastName:
+            self.CONTACTlastNameText += ch
+        elif self.CONTACTinPhoneNumber:
+            self.CONTACTphoneNumberText += ch
+        elif self.CONTACTinSource:
+            self.CONTACTsourceText += ch
+        elif self.CONTACTinLocation:
+            self.CONTACTlocationText += ch
+        elif self.CONTACTinRecoveryMethod:
+            self.CONTACTrecoveryMethodText += ch
+
+    def __charactersCOOKIE(self, ch):
+        if self.COOKIEinName:
+            self.COOKIEnameText += ch
+        elif self.COOKIEinPath:
+            self.COOKIEpathText += ch
+        elif self.COOKIEinDomain:
+            self.COOKIEdomainText += ch
+        elif self.COOKIEinCreatedDate:
+            self.COOKIEcreatedDateText += ch
+        elif self.COOKIEinAccessedDate:
+            self.COOKIEaccessedDate += ch
+        elif self.COOKIEinExpirationDate:
+            self.COOKIEexpirationDateText += ch
+        elif self.COOKIEinSource:
+            self.COOKIEsourceText += ch
+        elif self.COOKIEinLocation:
+            self.COOKIElocationText += ch
+        elif self.COOKIEinRecoveryMethod:
+            self.COOKIErecoveryMethodText += ch
+
+    def __charactersCHAT(self, ch):
+        if self.CHATinSender:
+            self.CHATsenderText += ch
+        elif self.CHATinReceiver:
+            self.CHATreceiverText += ch
+        elif self.CHATinPartner:
+            self.CHATpartnerText += ch
+        elif self.CHATinDateTimeSent:
+            self.CHATdateTimeSentText += ch
+        elif self.CHATinDateTimeReceived:
+            self.CHATdateTimeReceivedText += ch
+        elif self.CHATinDateTime:
+            self.CHATdateTimeText += ch                
+        elif self.CHATinMessage:
+            self.CHATmessageText += ch
+        elif self.CHATinMessageStatus:
+            self.CHATmessageStatusText += ch
+        elif self.CHATinMessageType:
+            self.CHATmessageTypeText += ch
+        elif self.CHATinSource:
+            self.CHATsourceText += ch
+        elif self.CHATinLocation:
+            self.CHATlocationText += ch
+        elif self.CHATinRecoveryMethod:
+            self.CHATrecoveryMethodText += ch  
+
+    def __charactersDEVICE(self, ch):        
+        if self.DEVICEinId:
+            if self.DEVICEidText == '':
+                self.DEVICEidText += ch
+        elif self.DEVICEinImsi:
+            if self.DEVICEimsiText == '':
+                self.DEVICEimsiText += ch
+        elif self.DEVICEinBluetoothAddress:
+            if self.DEVICEbluetoothAddressText == '':
+                self.DEVICEbluetoothAddressText += ch 
+        elif self.DEVICEinBluetoothName:
+            if self.DEVICEbluetoothNameText == '':
+                self.DEVICEbluetoothNameText += ch
+        elif self.DEVICEinImei:
+            if self.DEVICEimeiText == '':
+                self.DEVICEimeiText += ch
+        elif self.DEVICEinSerialNumber:
+            if self.DEVICEserialNumberText == '':
+                self.DEVICEserialNumberText += ch
+        elif self.DEVICEinName:
+            if self.DEVICEnameText == '':
+                self.DEVICEnameText += ch
+        elif self.DEVICEinModel:
+            if self.DEVICEmodelText == '':
+                self.DEVICEmodelText += ch
+        elif self.DEVICEinIccid:
+            if self.DEVICEiccidText == '':
+                self.DEVICEiccidText += ch
+        elif self.DEVICEinOsVersion:
+            if self.DEVICEosVersionText == '':
+                self.DEVICEosVersionText += ch
+
+    def __charactersEMAIL(self, ch):
+        if self.EMAILinSender:
+            self.EMAILsenderText += ch
+        elif self.EMAILinRecipients:
+            self.EMAILrecipientText += ch
+        elif self.EMAILinCC:
+            self.EMAILccText += ch
+        elif self.EMAILinBCC:
+            self.EMAILbccText += ch
+        elif self.EMAILinDateTime:
+            self.EMAILdateTimeText += ch
+        elif self.EMAILinSubject:
+            self.EMAILsubjectText += ch
+        elif self.EMAILinBody:
+            self.EMAILbodyText += ch
+        elif self.EMAILinAttachment:
+            self.EMAILattachmentText += ch
+        elif self.EMAILinSource:
+            self.EMAILsourceText += ch
+        elif self.EMAILinLocation:
+            self.EMAILlocationText += ch
+        elif self.EMAILinRecoveryMethod:
+            self.EMAILrecoveryMethodText += ch
+
+    def __charactersFILE(self, ch):
+        if self.FILEinTag:
+            self.FILEtagText += ch
+        elif self.FILEinFileName:
+            self.FILEfileNameText += ch
+        elif self.FILEinImage:
+            self.FILEimageText += ch
+        elif self.FILEinFileExtension:
+            self.FILEfileExtensionText += ch
+        elif self.FILEinFileSize:
+            self.FILEfileSizeText += ch
+        elif self.FILEinCreated:
+            self.FILEcreatedText += ch
+        elif self.FILEinModified:
+            self.FILEmodifiedText += ch
+        elif self.FILEinAccessed:
+            self.FILEaccessedText += ch
+        elif self.FILEinMD5:
+            self.FILEmd5Text += ch
+        elif self.FILEinExifMake:
+            self.FILEexifMakeText += ch
+        elif self.FILEinExifModel:
+            self.FILEexifModelText += ch 
+        elif self.FILEinExifLatitudeRef:
+            self.FILEexifLatitudeRefText += ch
+        elif self.FILEinExifLatitude:
+            self.FILEexifLatitudeText += ch
+        elif self.FILEinExifLongitudeRef:
+            self.FILEexifLongitudeRef += ch
+        elif self.FILEinExifLongitude:
+            self.FILEexifLongitudeText += ch
+        elif self.FILEinExifAltitude:
+            self.FILEexifAltitudeText += ch
+        elif self.FILEinSource:
+            self.FILEsourceText += ch
+        elif self.FILEinLocation:
+            self.FILElocationText += ch
+        elif self.FILEinRecoveryMethod:
+            self.FILErecoveryMethodText += ch
+
+    def __charactersFILE_SYS_INFO(self, ch):
+        if self.FILE_SYS_INFOinVolumeSn:
+            self.FILE_SYS_INFOvolumeSnText += ch
+        elif self.FILE_SYS_INFOinFileSystem:
+            self.FILE_SYS_INFOfileSystemText += ch
+        elif self.FILE_SYS_INFOinCapacity:
+            self.FILE_SYS_INFOcapacityText += ch
+        elif self.FILE_SYS_INFOinUnallocated:
+            self.FILE_SYS_INFOunallocatedText += ch
+        elif self.FILE_SYS_INFOinAllocated:
+            self.FILE_SYS_INFOallocatedText += ch
+        elif self.FILE_SYS_INFOinOffest:
+            self.FILE_SYS_INFOoffsetText += ch        
+
+    def __charactersLOCATION(self, ch):
+        if self.LOCATIONinType:
+            self.LOCATIONtypeText += ch
+        elif self.LOCATIONinCreated:
+            self.LOCATIONcreatedText += ch
+        elif self.LOCATIONinLatitude:
+            self.LOCATIONlatitudeText += ch
+        elif self.LOCATIONinLongitude:
+            self.LOCATIONlongitudeText += ch
+        elif self.LOCATIONinSource:
+            self.LOCATIONsourceText += ch
+        elif self.LOCATIONinLocation:
+            self.LOCATIONlocationText += ch
+        elif self.LOCATIONinRecoveryMethod:
+            self.LOCATIONrecoveryMethodText += ch
+
+    def __charactersSEARCHED_ITEM(self, ch):
+        if self.SEARCHED_ITEMinValue:
+            self.SEARCHED_ITEMvalueText += ch
+        elif self.SEARCHED_ITEMinAppSource:
+            self.SEARCHED_ITEMappSourceText += ch
+        elif self.SEARCHED_ITEMinTimeStamp:
+            self.SEARCHED_ITEMtimeStampText += ch
+        elif self.SEARCHED_ITEMinSource:
+            self.SEARCHED_ITEMsourceText += ch
+        elif self.SEARCHED_ITEMinLocation:
+            self.SEARCHED_ITEMlocationText += ch
+        elif self.SEARCHED_ITEMinRecoveryMethod:
+            self.SEARCHED_ITEMrecoveryMethodText += ch
+
+    def __charactersSMS(self, ch):
+        if self.SMSinPartner:
+            self.SMSpartnerText += ch
+        elif self.SMSinRecipient:
+            self.SMSrecipientText += ch
+        elif self.SMSinSender:
+            self.SMSsenderText += ch
+        elif self.SMSinReceivedDateTime:
+            self.SMSreceivedDateTimeText += ch
+        elif self.SMSinSentDateTime:
+            self.SMSsentDateTimeText += ch
+        elif self.SMSinMessage:
+            self.SMSmessageText += ch
+        elif self.SMSinDirection:
+            self.SMSdirectionText += ch
+        elif self.SMSinSource:
+            self.SMSsourceText += ch
+        elif self.SMSinLocation:
+            self.SMSlocationText += ch
+        elif self.SMSinRecoveryMethod:
+            self.SMSrecoveryMethodText += ch
+
+    def __charactersWEB(self, ch):
+        if self.WEBinUrl:
+            self.WEBurlText += ch
+        elif self.WEBinLastVisited:
+            self.WEBlastVisitedText += ch
+        elif self.WEBinTitle:
+            self.WEBtitleText += ch
+        elif self.WEBinVisitCount:
+            self.WEBvisitCountText += ch
+        elif self.WEBinSource:
+            self.WEBsourceText += ch
+        elif self.WEBinLocation:
+            self.WEBlocationText += ch
+        elif self.WEBinRecoveryMethod:
+            self.WEBrecoveryMethodText += ch
+
+    def __charactersWIRELESS_NET(self, ch):
+        if self.WIRELESS_NETinMacAaddress:
+            self.WIRELESS_NETmacAddressText += ch
+        elif self.WIRELESS_NETinChannel:
+            self.WIRELESS_NETchannelText += ch
+        elif self.WIRELESS_NETinTimeStamp:
+            self.WIRELESS_NETtimeStampText += ch
+        elif self.WIRELESS_NETinLatitude:
+            self.WIRELESS_NETlatitudeText += ch
+        elif self.WIRELESS_NETinLongitude:
+            self.WIRELESS_NETlongitudeText += ch
+        elif self.WIRELESS_NETinAccuracy:
+            self.WIRELESS_NETaccuracyText += ch
+        elif self.WIRELESS_NETinSource:
+            self.WIRELESS_NETsourceText += ch
+        elif self.WIRELESS_NETinLocation:
+            self.WIRELESS_NETlocationText += ch
+        elif self.WIRELESS_NETinRecoveryMethod:
+            self.WIRELESS_NETrecoveryMethodText += ch
+
+    def __charactersWIN_TIMELINE(self, ch):
+        if self.WIN_TIMELINEinAppName:
+            self.WIN_TIMELINEappNameText += ch
+        elif self.WIN_TIMELINEinActivityType:
+            self.WIN_TIMELINEactivityTypeText += ch
+        elif self.WIN_TIMELINEinTimeStamp:
+            self.WIN_TIMELINEtimeStampText += ch
+        elif self.WIN_TIMELINEinSource:
+            self.WIN_TIMELINEsourceText += ch
+        elif self.WIN_TIMELINEinLocation:
+            self.WIN_TIMELINElocationText += ch
+        elif self.WIN_TIMELINEinRecoveryMethod:
+            self.WIN_TIMELINErecoveryMethodText += ch
+
+    def __startElementFragmentPHONE_NUM(self, attrFragment):
         if attrFragment == 'Phone Number': 
             self.CALL_PHONE_NUM_DEVICE_VALUEin = True 
 
         if attrFragment == 'WhatsApp Name': 
             self.CALL_PHONE_NAME_DEVICE_VALUEin = True 
 
-    def __processCALL(self, attrFragment):
+    def __startElementFragmentCALL(self, attrFragment):
         if attrFragment in ('Partner', 'Partners'):  
                 self.CALLinPartner = True 
-
-        if attrFragment == 'Partner Name' :  
+        elif attrFragment == 'Partner Name' :  
                 self.CALLinPartnerName = True 
-
-        if attrFragment == 'Direction':  
+        elif attrFragment == 'Direction':  
                 self.CALLinDirection = True 
-
-        if attrFragment.find('Call Date/Time') > -1:  
+        elif attrFragment.find('Call Date/Time') > -1:  
                 self.CALLinTimeStamp = True 
-
-        if attrFragment.find('Call Duration') > -1:  
+        elif attrFragment.find('Call Duration') > -1:  
                 self.CALLinDuration = True 
-
-        if attrFragment == 'Source':  
+        elif attrFragment == 'Source':  
                 self.CALLinSource = True 
-
-        if attrFragment == 'Location':  
+        elif attrFragment == 'Location':  
                 self.CALLinLocation = True 
-
-        if attrFragment == 'Recovery Method':  
+        elif attrFragment.lower() == 'recovery method':  
                 self.CALLinRecoveryMethod = True     
 
-    def __processCHAT(self, attrFragment):
+    def __startElementFragmentCELL_TOWER(self, attrFragment):
+        if attrFragment == 'CellID' :  
+                self.CELL_TOWERinCID = True 
+        elif attrFragment == 'Location Area Code':  
+                self.CELL_TOWERinLAC = True 
+        elif attrFragment == 'Mobile Country Code':
+                self.CELL_TOWERinMCC = True 
+        elif attrFragment == 'Mobile Network Code' :
+                self.CELL_TOWERinMNC = True 
+        elif attrFragment.find('Timestamp Date/Time - UTC') > -1:  
+                self.CELL_TOWERinTimeStamp = True
+        elif attrFragment == 'Latitude' :
+                self.CELL_TOWERinLatitude = True 
+        elif attrFragment == 'Longitude' :
+                self.CELL_TOWERinLongitude = True 
+        elif attrFragment == 'Source':  
+                self.CELL_TOWERinSource = True 
+        elif attrFragment == 'Location':  
+                self.CELL_TOWERnLocation = True 
+        elif attrFragment.lower() == 'recovery method':  
+                self.CELL_TOWERinRecoveryMethod = True     
+
+    def __startElementFragmentCHAT(self, attrFragment):
 #---    the first condition is for Android WhatsApp Messages, iOS WhatsApp Messages
 #       and for Snapchat Chat Messages, the second condition is for iOS Telegram Messages
 #        
-        if attrFragment in ('Sender', 'Sender Name'):  
+        if attrFragment in ('Sender', 'Sender Name', 'Last Sender'):  
             self.CHATinSender = True 
 
 #---    the first condition is for Android WhatsApp Messages and iOS WhatsApp Messages
@@ -566,12 +1168,12 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.CHATinReceiver = True 
 
 #---    the condition is for Android Telegram Messages
-#
-        if attrFragment == 'Partner':  
+# 
+        if attrFragment in ('Partner', 'Participant Information', 'Conversation Name'): 
             self.CHATinPartner = True 
 
         if (attrFragment.find('Message Sent Date/Time') > -1 or 
-             attrFragment.find('Message Received Date/Time') > -1):  
+            attrFragment.find('Message Received Date/Time') > -1):              
             self.CHATinDateTimeReceived = True            
 
 #---    the first condition is for iOS WhatsApp Messages
@@ -580,13 +1182,14 @@ class ExtractTraces(xml.sax.ContentHandler):
         if (attrFragment.find('Message Date/Time') > -1 or 
             attrFragment.find('Creation Date/Time') > -1 or 
             attrFragment.find('Date/Time', 0) > - 1 or
+            attrFragment.find('Last Message Date/Time', 0) > - 1 or
             attrFragment == 'Created Date/Time'):  
             self.CHATinDateTime = True
 
 #---    the first condition is for WhatsApp Messages
 #       the second condition is for Telegram Messages   
 #            
-        if attrFragment in ('Message', 'Message Body', 'Text'):
+        if attrFragment in ('Message', 'Message Body', 'Text', 'Last Message'):
             self.CHATinMessage = True 
 
         if attrFragment == 'Message Status':  
@@ -594,7 +1197,7 @@ class ExtractTraces(xml.sax.ContentHandler):
 
 #---    only for iOS Whatsapp, Telegram and Skype Messages
 #            
-        if attrFragment == 'Message Type':  
+        if attrFragment in ('Message Type', 'Conversation Type'):  
             self.CHATinMessageType = True 
 
         if attrFragment == 'Source':  
@@ -603,33 +1206,80 @@ class ExtractTraces(xml.sax.ContentHandler):
         if attrFragment == 'Location':  
             self.CHATinLocation = True 
 
-        if attrFragment == 'Recovery Method':  
+        if attrFragment.lower() == 'recovery method':  
             self.CHATinRecoveryMethod = True 
 
     
-    def __processCONTACT(self, attrFragment):
+    def __startElementFragmentCONTACT(self, attrFragment):
         if attrFragment == 'Display Name':  
             self.CONTACTinName = True 
-
-        if attrFragment == 'Phone Number(s)':  
+        elif attrFragment == 'First Name':  
+            self.CONTACTinFirstName = True 
+        elif attrFragment == 'Last Name':  
+            self.CONTACTinLastName = True 
+        elif attrFragment == 'Phone Number(s)':  
             self.CONTACTinPhoneNumber = True 
-
-        if attrFragment == 'Source':  
+        elif attrFragment == 'Source':  
             self.CONTACTinSource = True
-
-        if attrFragment == 'Location':  
+        elif attrFragment == 'Location':  
             self.CONTACTinLocation = True 
-
-        if attrFragment == 'Recovery Method':  
+        elif attrFragment.lower() == 'recovery method':  
             self.CONTACTinRecoveryMethod = True 
 
-    def __processDEVICE(self, attrFragment):
-        if attrFragment == 'Volume Serial Number':  
-            self.DEVICEinSerialNumber = True 
-        if attrFragment == 'Source':  
-            self.DEVICEinName = True 
+    def __startElementFragmentCOOKIE(self, attrFragment):
+        if attrFragment == 'Name':
+            self.COOKIEinName = True
 
-    def __processEMAIL(self, attrFragment):
+        if attrFragment.find('Accessed Date/Time') > - 1:
+            self.COOKIEinAccessedDate = True
+
+        if attrFragment.find('Created Date/Time') > - 1:
+            self.COOKIEinCreatedDate = True
+
+        if attrFragment.find('Expiration Date/Time') > - 1:
+            self.COOKIEinExpirationDate = True
+
+        if attrFragment == 'Path':
+            self.COOKIEinPath = True
+
+        if attrFragment == 'Host':  
+            self.COOKIEinDomain = True 
+
+        if attrFragment == 'Source':  
+            self.COOKIEinSource = True
+
+        if attrFragment == 'Location':  
+            self.COOKIEinLocation = True 
+
+        if attrFragment.lower() == 'recovery method':  
+            self.COOKIEinRecoveryMethod = True 
+
+    def __startElementFragmentDEVICE(self, attrFragment):
+        if attrFragment == 'Serial Number':
+            self.DEVICEinSerialNumber = True
+        elif attrFragment == 'Device ID':
+            self.DEVICEinId = True
+        elif attrFragment == 'Device Name':
+            self.DEVICEinName = True
+        elif attrFragment == 'IMSI':
+            self.DEVICEinImsi = True
+            print(f'DEVICEinImsi True')
+        elif attrFragment == 'IMSE':
+            self.DEVICEinImei = True
+        elif attrFragment == 'Model ID':
+            self.DEVICEinModel = True
+        elif attrFragment == 'OS Version':
+            self.DEVICEinOsVersion = True
+        elif attrFragment == 'ICCID':
+            self.DEVICEinIccid = True
+        elif attrFragment == 'Bluetooth Address':
+            self.DEVICEinBluetoothAddress = True
+        elif attrFragment == 'Bluetooth Name':
+            self.DEVICEinBluetoothName = True
+        elif attrFragment == 'Bluetooth Address':
+            self.DEVICEinBluetoothAddress = True
+
+    def __startElementFragmentEMAIL(self, attrFragment):
         if attrFragment in ('Sender', 'From Address', 'From'):  
             self.EMAILinSender = True 
 
@@ -660,11 +1310,11 @@ class ExtractTraces(xml.sax.ContentHandler):
         if attrFragment == 'Location':  
             self.EMAILinLocation = True 
 
-        if attrFragment == 'Recovery Method':  
+        if attrFragment.lower() == 'recovery method':  
             self.EMAILinRecoveryMethod = True 
 
     
-    def __processFILE(self, attrFragment):
+    def __startElementFragmentFILE(self, attrFragment):
         if attrFragment == 'Tags':
             self.FILEinTag = True
         if attrFragment in ('File Name', 'Filename', 'File', '_Video'):
@@ -679,7 +1329,8 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.FILEinCreated = True
         if attrFragment.find('Last Modified Date/Time') > -1:
             self.FILEinModified = True
-        if attrFragment.find('Accessed Modified Date/Time') > -1:
+        if attrFragment.find('Accessed Modified Date/Time') > -1 or \
+            attrFragment.find('Last Accessed Date/Time') > -1:
             self.FILEinAccessed = True
         if attrFragment == 'MD5 Hash':
             self.FILEinMD5 = True
@@ -701,10 +1352,55 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.FILEinSource = True
         if attrFragment == 'Location':
             self.FILEinLocation = True
-        if attrFragment == 'Recovery Method':
+        if attrFragment.lower() == 'recovery method':
             self.FILEinRecoveryMethod = True
 
-    def __processSMS(self, attrFragment):
+    def __startElementFragmentFILE_SYS_INFO(self, attrFragment):
+        if attrFragment == 'Volume Serial Number':  
+            self.FILE_SYS_INFOinVolumeSn = True 
+        elif attrFragment == 'File System':  
+            self.FILE_SYS_INFOinFileSystem = True
+        elif attrFragment == 'Total Capacity (Bytes)':  
+            self.FILE_SYS_INFOinCapacity = True 
+        elif attrFragment == 'Unallocated Area (Bytes)':  
+            self.FILE_SYS_INFOinUnallocated = True 
+        elif attrFragment == 'Allocated Area (Bytes)':  
+            self.FILE_SYS_INFOinAllocated = True 
+        elif attrFragment == 'Volume Offset (Bytes)':  
+            self.FILE_SYS_INFOinOffest = True 
+
+    def __startElementFragmentLOCATION(self, attrFragment):
+        if attrFragment == 'Location Type':
+            self.LOCATIONinType = True
+        elif attrFragment.find('Created Date/Time') > - 1:
+            self.LOCATIONinCreated = True
+        elif attrFragment == 'Latitude':
+            self.LOCATIONinLatitude = True
+        elif attrFragment == 'Longitude':
+            self.LOCATIONinLongitude = True
+        elif attrFragment == 'Source':
+            self.LOCATIONinSource = True
+        elif attrFragment == 'Location':
+            self.LOCATIONinLocation = True
+        elif attrFragment.lower() == 'recovery method':
+            self.LOCATIONinRecoveryMethod = True
+
+    def __startElementFragmentSEARCHED_ITEM(self, attrFragment):
+        if attrFragment in ('Search Term', 'Keyword Search Term'):
+            self.SEARCHED_ITEMinValue = True
+        if attrFragment.find('Date/Time - UTC') > -1 or \
+            attrFragment.find('Last Visited Date/Time - UTC') > -1:
+            self.SEARCHED_ITEMinTimeStamp = True
+        if attrFragment == 'Search Engine':
+            self.SEARCHED_ITEMinAppSource = True
+        if attrFragment == 'Source':
+            self.SEARCHED_ITEMinSource = True
+        if attrFragment == 'Location':
+            self.SEARCHED_ITEMinLocation = True
+        if attrFragment.lower() == 'recovery method':
+            self.SEARCHED_ITEMinRecoveryMethod = True
+
+    def __startElementFragmentSMS(self, attrFragment):
         if attrFragment == 'Partner':
             self.SMSinPartner = True
         if attrFragment in ('Recipient', 'Recipient(s)'):
@@ -726,7 +1422,7 @@ class ExtractTraces(xml.sax.ContentHandler):
         if attrFragment.lower() == 'recovery method':
             self.SMSinRecoveryMethod = True
 
-    def __processWEB(self, attrFragment):
+    def __startElementFragmentWEB(self, attrFragment):
         if attrFragment == 'URL':
             self.WEBinUrl = True
         if attrFragment.find('Last Visited Date/Time') > -1:
@@ -739,16 +1435,51 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.WEBinSource = True
         if attrFragment == 'Location':
             self.WEBinLocation = True
-        if attrFragment == 'Recovery Method':
+        if attrFragment.lower() == 'recovery method':
             self.WEBinRecoveryMethod = True
     
+    def __startElementFragmentWIRELESS_NET(self, attrFragment):
+        if attrFragment == 'MAC Address' :  
+                self.WIRELESS_NETinMacAaddress = True 
+        elif attrFragment == 'Channel':  
+                self.WIRELESS_NETinChannel = True 
+        elif attrFragment.find('Timestamp Date/Time - UTC') > -1:  
+                self.WIRELESS_NETinTimeStamp = True
+        elif attrFragment == 'Latitude' :
+                self.WIRELESS_NETinLatitude = True 
+        elif attrFragment == 'Longitude' :
+                self.WIRELESS_NETinLongitude = True 
+        elif attrFragment.find('Accuracy') > - 1:
+            self.WIRELESS_NETinAccuracy= True 
+        elif attrFragment == 'Source':  
+                self.WIRELESS_NETinSource = True 
+        elif attrFragment == 'Location':  
+                self.WIRELESS_NETnLocation = True 
+        elif attrFragment.lower() == 'recovery method':  
+                self.WIRELESS_NETinRecoveryMethod = True 
+
+    def __startElementFragmentWIN_TIMELINE(self, attrFragment):
+        if attrFragment == 'Application Name':
+            self.WIN_TIMELINEinAppName = True
+        if attrFragment == 'Activity Type':
+            self.WIN_TIMELINEinActivityType = True
+        if attrFragment.find('Start Date/Time') > -1:
+            self.WIN_TIMELINEinTimeStamp = True
+        if attrFragment == 'Source':
+            self.WIN_TIMELINEinSource = True
+        if attrFragment == 'Location':
+            self.WIN_TIMELINEinLocation = True
+        if attrFragment.lower() == 'recovery method':
+            self.WIN_TIMELINEinRecoveryMethod = True
+
     def printObservable(self, oName, oCount):        
         line =  'processing traces --> ' + oName +  ' n. ' +  \
             str(oCount) + self.C_end
-        if oCount == 1:
-            print(self.C_green + '\n' + line, end='\r') 
-        else:
-            print(self.C_green + line, end='\r') 
+        if self.verbose:
+            if oCount == 1:
+                print(self.C_green + '\n' + line, end='\r') 
+            else:
+                print(self.C_green + line, end='\r') 
 
 #---    it captures each Element when it is opened., the order depends on their 
 #       position from the beginning of the document
@@ -756,88 +1487,90 @@ class ExtractTraces(xml.sax.ContentHandler):
     def startElement(self, elementName, attrs):
 
         self.lineXML +=1
-
         attrName = ''
 
-#*---   checks on Elements
-#        
         if elementName == 'Artifact':
             attrName = attrs.get('name')
-#---    checks on Attributes
-#        
             if  attrName in ('Android WhatsApp Accounts Information', 
                 'SIM Card Activity'): 
                 self.CALL_PHONE_NUM_DEVICEin = True
                 self.Observable = True
                 self.skipLine = True
-
-            if  attrName in self.CALL_PATTERN:
+            elif  attrName in self.CALL_PATTERN:
                 self.CALLin = True
                 self.Observable = True
                 self.skipLine = True   
-                self.CALLappNameText = attrName 
-
-            if  attrName == 'File System Information':
-                self.DEVICEin = True
-
-#---    It captures both "Android WhatsApp Messages"  and "iOS WhatsApp Messages"
-#                
-            if  attrName in self.CHAT_PATTERN:            
+                self.CALLappNameText = attrName             
+            elif  attrName in self.CELL_TOWER_PATTERN:
+                self.CELL_TOWERin = True
+                self.Observable = True
+                self.skipLine = True
+            elif  attrName in self.CHAT_PATTERN:            
                 self.CHATin = True
                 self.Observable = True
                 self.skipLine = True
                 self.CHATapplicationText = attrName 
-                #print("CHATin, application: " + self.CHATapplicationText ) 
-
-            if  (attrName == 'Android Contacts'):
+            elif  attrName in self.CONTACT_PATTERN:
                 self.CONTACTin = True
                 self.Observable = True
+                self.skipLine = True                   
+            elif  attrName in self.COOKIE_PATTERN:
+                self.COOKIEin = True
+                self.Observable = True
                 self.skipLine = True
-
-            if  attrName in self.FILE_PATTERN:
-                self.FILEin = True
-                self.Observable = True 
-                self.skipLine = True 
-                self.FILEtagText = attrName        
-
-            #if  attrName == 'Skype Chat Messages':
-            #    self.CHATin = True
-            #    self.CHATapplicationText = 'Skype'
-
-
-            #if  attrName == 'Snapchat Chat Messages':
-            #    self.CHATin = True
-            #    self.CHATapplicationText = 'Snapchat'                                              
-
-#---    for the Emails attrName can assume the values of:
-#       Android Emails. Gmail Emails, Android Yahoo Mail Emails, Outlook Emails, 
-#       MBOX Emails or Apple Mail
-#
-            if  attrName in self.EMAIL_PATTERN:
+                self.COOKIEappSourceText = attrName            
+            elif  attrName in self.DEVICE_PATTERN:
+                self.DEVICEin = True
+            elif  attrName in self.EMAIL_PATTERN:
                 self.EMAILin = True
                 self.Observable = True
                 self.skipLine = True
                 self.EMAILappName = attrName
-
-            if  attrName in self.SMS_PATTERN:
+            elif  attrName in self.FILE_PATTERN:
+                self.FILEin = True
+                self.Observable = True 
+                self.skipLine = True 
+                self.FILEtagText = attrName 
+            elif  attrName in self.FILE_SYS_INFO_PATTERN:
+                self.FILE_SYS_INFOin = True
+                self.Observable = True
+                self.skipLine = True
+            elif  attrName in self.LOCATION_PATTERN:
+                self.LOCATIONin = True
+                self.Observable = True
+                self.skipLine = True
+            elif  attrName in self.SEARCHED_ITEM_PATTERN:
+                self.SEARCHED_ITEMin = True
+                self.Observable = True
+                self.skipLine = True
+                self.SEARCHED_ITEMartifact = ''
+                if attrName == 'Google Searches':
+                    self.SEARCHED_ITEMartifact = 'Google Search Engine'
+                elif attrName == 'iOS Safari Recent Search Terms':
+                    self.SEARCHED_ITEMartifact = 'iOS Safari Search Engine'
+                elif attrName == 'Chrome Keyword Search Terms':
+                    self.SEARCHED_ITEMartifact = 'Google Chrome Search Engine'
+            elif  attrName in self.SMS_PATTERN:
                 self.SMSin = True
                 self.Observable = True
                 self.skipLine = True
-
-            if  (attrName in self.WEB_PATTERN  or 
+            elif  (attrName in self.WEB_PATTERN  or 
                 attrName.find('Edge/Internet Explorer') > -1):
                 self.WEBin = True
                 self.Observable = True
                 self.skipLine = True
-                self.WEBappName = attrName
-                #print("self.WEBappName=" + self.WEBappName)
-         
-               
-#---    there is a Hit Element for each Observable (CALL, CHAT etc.)
-#            
+                self.WEBappName = attrName            
+            elif  attrName in self.WIN_TIMELINE_PATTERN:
+                self.WIN_TIMELINEin = True
+                self.Observable = True
+                self.skipLine = True
+            elif  attrName in self.WIRELESS_NET_PATTERN:
+                self.WIRELESS_NETin = True
+                self.Observable = True
+                self.skipLine = True
+
         if (elementName == 'Hit'):  
             self.inHit = True
-            
             if self.CALLin:
                 self.CALLtotal += 1
                 self.printObservable('CALL', self.CALLtotal)
@@ -851,14 +1584,23 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.CALLsource.append('')
                 self.CALLlocation.append('')
                 self.CALLrecoveryMethod.append('')
-
-            if self.DEVICEin:
-                self.DEVICEnameText= ''
-                if self.DEVICEserialNumberText != '':
-                    pass             
-
-            
-            if self.CHATin:
+            elif self.CELL_TOWERin:
+                self.CELL_TOWERtotal += 1
+                self.printObservable('CELL TOWER', self.CELL_TOWERtotal)
+                self.CELL_TOWERid.append(str(self.CELL_TOWERtotal))
+                self.CELL_TOWERcid.append('')
+                self.CELL_TOWERlac.append('')
+                self.CELL_TOWERmcc.append('')
+                self.CELL_TOWERmnc.append('')
+                self.CELL_TOWERtimeStamp.append('')
+                self.CELL_TOWERlatitude.append('')
+                self.CELL_TOWERlongitude.append('')
+                self.CELL_TOWERsource.append('')
+                self.CELL_TOWERlocation.append('')
+                self.CELL_TOWERrecoveryMethod.append('')
+            elif self.DEVICEin:
+                self.printObservable('DEVICE INFO', 1)
+            elif self.CHATin:
                 self.CHATtotal += 1
                 self.printObservable('CHAT', self.CHATtotal)
                 self.CHATid.append(str(self.CHATtotal))
@@ -872,8 +1614,7 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.CHATlocation.append('')
                 self.CHATrecoveryMethod.append('')
                 self.CHATapplication.append(self.CHATapplicationText)
-
-            if self.CONTACTin:
+            elif self.CONTACTin:
                 self.CONTACTtotal += 1
                 self.printObservable('CONTACT', self.CONTACTtotal)
                 self.CONTACTid.append(str(self.CONTACTtotal))
@@ -882,9 +1623,21 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.CONTACTsource.append('')
                 self.CONTACTlocation.append('')
                 self.CONTACTrecoveryMethod.append('')
-
-
-            if self.EMAILin:
+            elif self.COOKIEin:
+                self.COOKIEtotal += 1
+                self.printObservable('COOKIE', self.COOKIEtotal)
+                self.COOKIEid.append(str(self.COOKIEtotal))
+                self.COOKIEappSource.append(self.COOKIEappSourceText)
+                self.COOKIEname.append('')
+                self.COOKIEpath.append('')
+                self.COOKIEdomain.append('')
+                self.COOKIEcreatedDate.append('')
+                self.COOKIEaccessedDate.append('')
+                self.COOKIEexpirationDate.append('')
+                self.COOKIEsource.append('')
+                self.COOKIElocation.append('')
+                self.COOKIErecoveryMethod.append('')
+            elif self.EMAILin:
                 self.EMAILtotal += 1
                 self.printObservable('EMAIL', self.EMAILtotal)
                 self.EMAILid.append(str(self.EMAILtotal))
@@ -900,8 +1653,7 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.EMAILsource.append('')
                 self.EMAILlocation.append('')
                 self.EMAILrecoveryMethod.append('')
-
-            if self.FILEin:
+            elif self.FILEin:
                 self.FILEtotal += 1
                 self.printObservable('FILE', self.FILEtotal)
                 self.FILEid.append(str(self.FILEtotal))
@@ -925,8 +1677,38 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.FILEsource.append('')
                 self.FILElocation.append('')
                 self.FILErecoveryMethod.append('')
-
-            if self.SMSin:
+            elif self.FILE_SYS_INFOin:
+                self.FILE_SYS_INFOtotal += 1
+                self.printObservable('FILE SYSTEM INFO', self.FILE_SYS_INFOtotal)
+                self.FILE_SYS_INFOid.append(str(self.FILE_SYS_INFOtotal))
+                self.FILE_SYS_INFOvolumeSn.append('')
+                self.FILE_SYS_INFOfileSystem.append('')
+                self.FILE_SYS_INFOcapacity.append('')
+                self.FILE_SYS_INFOunallocated.append('')
+                self.FILE_SYS_INFOallocated.append('')
+                self.FILE_SYS_INFOoffset.append('')
+            elif self.LOCATIONin:
+                self.LOCATIONtotal += 1
+                self.printObservable('LOCATION DEVICE', self.LOCATIONtotal)
+                self.LOCATIONid.append(str(self.LOCATIONtotal))                
+                self.LOCATIONtype.append('')
+                self.LOCATIONcreated.append('')
+                self.LOCATIONlatitude.append('')
+                self.LOCATIONlongitude.append('')
+                self.LOCATIONsource.append('')
+                self.LOCATIONlocation.append('')
+                self.LOCATIONrecoveryMethod.append('') 
+            elif self.SEARCHED_ITEMin:
+                self.SEARCHED_ITEMtotal += 1
+                self.printObservable('SEARCHED ITEMS', self.SEARCHED_ITEMtotal)
+                self.SEARCHED_ITEMid.append(str(self.SEARCHED_ITEMtotal))
+                self.SEARCHED_ITEMappSource.append(self.SEARCHED_ITEMartifact)
+                self.SEARCHED_ITEMtimeStamp.append('')
+                self.SEARCHED_ITEMvalue.append('')
+                self.SEARCHED_ITEMsource.append('')
+                self.SEARCHED_ITEMlocation.append('')
+                self.SEARCHED_ITEMrecoveryMethod.append('') 
+            elif self.SMSin:
                 self.SMStotal += 1
                 self.printObservable('SMS', self.SMStotal)
                 self.SMSid.append(str(self.SMStotal))
@@ -938,9 +1720,8 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.SMSdirection.append('')
                 self.SMSsource.append('')
                 self.SMSlocation.append('')
-                self.SMSrecoveryMethod.append('') 
-
-            if self.WEBin:
+                self.SMSrecoveryMethod.append('')                 
+            elif self.WEBin:
                 self.WEBtotal += 1
                 self.printObservable('WEB', self.WEBtotal)
                 self.WEBid.append(str(self.WEBtotal))
@@ -951,49 +1732,74 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.WEBappSource.append(self.WEBappName)
                 self.WEBsource.append('')
                 self.WEBlocation.append('')
-                self.WEBrecoveryMethod.append('')                
-
+                self.WEBrecoveryMethod.append('') 
+            elif self.WIRELESS_NETin:
+                self.WIRELESS_NETtotal += 1
+                self.printObservable('WIWIRELESS NETWORK', self.WIRELESS_NETtotal)
+                self.WIRELESS_NETid.append(str(self.WIRELESS_NETtotal))
+                self.WIRELESS_NETmacAddress.append('')
+                self.WIRELESS_NETchannel.append('')
+                self.WIRELESS_NETtimeStamp.append('')
+                self.WIRELESS_NETlatitude.append('')
+                self.WIRELESS_NETlongitude.append('')
+                self.WIRELESS_NETaccuracy.append('')
+                self.WIRELESS_NETsource.append('')
+                self.WIRELESS_NETlocation.append('')
+                self.WIRELESS_NETrecoveryMethod.append('')
+            elif self.WIN_TIMELINEin:
+                self.WIN_TIMELINEtotal += 1
+                self.printObservable('WINDOWS TIME LINE', self.WIN_TIMELINEtotal)
+                self.WIN_TIMELINEid.append(str(self.WIN_TIMELINEtotal))
+                self.WIN_TIMELINEappName.append('')
+                self.WIN_TIMELINEactivityType.append('')
+                self.WIN_TIMELINEtimeStamp.append('')
+                self.WIN_TIMELINEsource.append('')
+                self.WIN_TIMELINElocation.append('')
+                self.WIN_TIMELINErecoveryMethod.append('')             
         if elementName == 'Fragment':
             attrName = attrs.get('name')        
-#---    processing Fragment CALL
-#
             if self.CALLin and self.inHit:
-                self.__processCALL(attrName)
-
-            if self.DEVICEin and self.inHit:
-                self.__processDEVICE(attrName)
-
-            if self.CHATin and self.inHit: 
-                self.__processCHAT(attrName)
-
-            if self.CONTACTin and self.inHit:
-                self.__processCONTACT(attrName)            
-            
-            if self.CALL_PHONE_NUM_DEVICEin and self.inHit:
-                self.__processPHONE_NUM(attrName)  
-
-            if self.EMAILin and self.inHit:
-                self.__processEMAIL(attrName)  
-
-            if self.FILEin and self.inHit:
-                self.__processFILE(attrName)
-            
-            if self.SMSin and self.inHit:
-                self.__processSMS(attrName) 
-
-            if self.WEBin and self.inHit:
-                self.__processWEB(attrName)  
-
+                self.__startElementFragmentCALL(attrName)
+            elif self.CELL_TOWERin and self.inHit:
+                self.__startElementFragmentCELL_TOWER(attrName)
+            elif self.DEVICEin and self.inHit:
+                self.__startElementFragmentDEVICE(attrName)
+            elif self.CHATin and self.inHit: 
+                self.__startElementFragmentCHAT(attrName)
+            elif self.CONTACTin and self.inHit:
+                self.__startElementFragmentCONTACT(attrName)
+            elif self.COOKIEin and self.inHit:
+                self.__startElementFragmentCOOKIE(attrName)
+            elif self.CALL_PHONE_NUM_DEVICEin and self.inHit:
+                self.__startElementFragmentPHONE_NUM(attrName)
+            elif self.EMAILin and self.inHit:
+                self.__startElementFragmentEMAIL(attrName)
+            elif self.FILEin and self.inHit:
+                self.__startElementFragmentFILE(attrName)
+            elif self.FILE_SYS_INFOin and self.inHit:
+                self.__startElementFragmentFILE_SYS_INFO(attrName)
+            elif self.LOCATIONin and self.inHit:
+                self.__startElementFragmentLOCATION(attrName)
+            elif self.SEARCHED_ITEMin and self.inHit:
+                self.__startElementFragmentSEARCHED_ITEM(attrName)
+            elif self.SMSin and self.inHit:
+                self.__startElementFragmentSMS(attrName)
+            elif self.WEBin and self.inHit:
+                self.__startElementFragmentWEB(attrName)
+            elif self.WIRELESS_NETin and self.inHit:
+                self.__startElementFragmentWIRELESS_NET(attrName)
+            elif self.WIN_TIMELINEin and self.inHit:
+                self.__startElementFragmentWIN_TIMELINE(attrName)
             
             if (not self.Observable):
                 line = self.C_grey + '*\tProcessing Element <' + elementName + '> at line '
                 line += str(self.lineXML) + ' ...'  + self.C_end
-                if self.skipLine:
-                    print ('\n' + line , end='\r')
-                    self.skipLine = False                  
-                else:
-                    print (line , end='\r')                  
-
+                if self.verbose:
+                    if self.skipLine:
+                        print ('\n' + line , end='\r')
+                        self.skipLine = False                  
+                    else:
+                        print (line , end='\r')                  
 
     def __endElementFragmentPHONE_NUM(self):        
         if self.CALL_PHONE_NUM_DEVICE_VALUEin:            
@@ -1007,41 +1813,76 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.CALLpartner[self.CALLtotal - 1] = self.CALLpartnerText
             self.CALLpartnerText = ''
             self.CALLinPartner = False
-
-        if self.CALLinPartnerName:
+        elif self.CALLinPartnerName:
             self.CALLpartnerName[self.CALLtotal - 1] = self.CALLpartnerNameText
             self.CALLpartnerNameText = ''
             self.CALLinPartnerName = False
-
-        if self.CALLinDirection:
+        elif self.CALLinDirection:
             self.CALLdirection[self.CALLtotal - 1] = self.CALLdirectionText
             self.CALLdirectionText = ''
             self.CALLinDirection = False
-
-        if self.CALLinTimeStamp:
+        elif self.CALLinTimeStamp:
             self.CALLtimeStamp[self.CALLtotal - 1] = self.CALLtimeStampText
             self.CALLtimeStampText = ''
             self.CALLinTimeStamp = False
-
-        if self.CALLinDuration:
+        elif self.CALLinDuration:
             self.CALLduration[self.CALLtotal - 1] = self.CALLdurationText
             self.CALLdurationText = ''
             self.CALLinDuration = False
-
-        if self.CALLinSource:
+        elif self.CALLinSource:
             self.CALLsource[self.CALLtotal - 1] = self.CALLsourceText
             self.CALLsourceText = ''
             self.CALLinSource = False
-
-        if self.CALLinLocation:
+        elif self.CALLinLocation:
             self.CALLlocation[self.CALLtotal - 1] = self.CALLlocationText
             self.CALLlocationText = ''
             self.CALLinLocation = False
-
-        if self.CALLinRecoveryMethod:
+        elif self.CALLinRecoveryMethod:
             self.CALLrecoveryMethod.append(self.CALLrecoveyMethodText)
             self.CALLrecoveyMethodText = ''
             self.CALLinRecoveryMethod = False
+
+    def __endElementFragmentCELL_TOWER(self):
+        if self.CELL_TOWERinCID:
+            self.CELL_TOWERcid[self.CELL_TOWERtotal - 1] = self.CELL_TOWERcidText
+            self.CELL_TOWERcidText = ''
+            self.CELL_TOWERinCID = False
+        elif self.CELL_TOWERinLAC:
+            self.CELL_TOWERlac[self.CELL_TOWERtotal - 1] = self.CELL_TOWERlacText
+            self.CELL_TOWERlacText = ''
+            self.CELL_TOWERinLAC = False
+        elif self.CELL_TOWERinMCC:
+            self.CELL_TOWERmcc[self.CELL_TOWERtotal - 1] = self.CELL_TOWERmccText
+            self.CELL_TOWERmccText = ''
+            self.CELL_TOWERinMCC = False
+        elif self.CELL_TOWERinMNC:
+            self.CELL_TOWERmnc[self.CELL_TOWERtotal - 1] = self.CELL_TOWERmncText
+            self.CELL_TOWERmncText = ''
+            self.CELL_TOWERinMNC = False
+        elif self.CELL_TOWERinTimeStamp:
+            self.CELL_TOWERtimeStamp[self.CELL_TOWERtotal - 1] = self.CELL_TOWERtimeStampText
+            self.CELL_TOWERtimeStampText = ''
+            self.CELL_TOWERinTimeStamp = False
+        elif self.CELL_TOWERinLatitude:
+            self.CELL_TOWERlatitude[self.CELL_TOWERtotal - 1] = self.CELL_TOWERlatitudeText
+            self.CELL_TOWERlatitudeText = ''
+            self.CELL_TOWERinLatitude = False
+        elif self.CELL_TOWERinLongitude:
+            self.CELL_TOWERlongitude[self.CELL_TOWERtotal - 1] = self.CELL_TOWERlongitudeText
+            self.CELL_TOWERlongitudeText = ''
+            self.CELL_TOWERinLongitude = False
+        elif self.CELL_TOWERinSource:
+            self.CELL_TOWERsource[self.CELL_TOWERtotal - 1] = self.CELL_TOWERsourceText
+            self.CELL_TOWERsourceText = ''
+            self.CELL_TOWERinSource = False
+        elif self.CELL_TOWERinLocation:
+            self.CELL_TOWERlocation[self.CELL_TOWERtotal - 1] = self.CELL_TOWERlocationText
+            self.CELL_TOWERlocationText = ''
+            self.CELL_TOWERinLocation = False
+        elif self.CELL_TOWERinRecoveryMethod:
+            self.CELL_TOWERrecoveryMethod.append(self.CELL_TOWERrecoveryMethodText)
+            self.CELL_TOWERrecoveyMethodText = ''
+            self.CELL_TOWERinRecoveryMethod = False
 
     def __endElementFragmentCHAT(self):
         if self.CHATinSender:
@@ -1051,8 +1892,6 @@ class ExtractTraces(xml.sax.ContentHandler):
         
         if self.CHATinReceiver:
             self.CHATreceiver[self.CHATtotal - 1] = self.CHATreceiverText
-            #print('CHATapplication: ' + self.CHATapplicationText + 
-            #    ', CHATreceiver: ' + self.CHATreceiverText)
             self.CHATreceiverText = ''
             self.CHATinReceiver = False
 
@@ -1130,6 +1969,7 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.CHATdateTimeText = ''
 
             if self.CHATpartnerText != '':
+                
                 if self.CHATmessageTypeText.lower() == 'incoming':
                     self.CHATsender[self.CHATtotal - 1] = self.CHATapplicationText + \
                     ' - ' + self.CHATpartnerText
@@ -1140,30 +1980,34 @@ class ExtractTraces(xml.sax.ContentHandler):
                     self.CHATsender[self.CHATtotal - 1] = self.CALLphoneNumberDevice
                 self.CHATpartnerText = ''
                 
-
-
     def __endElementFragmentCONTACT(self):
         if self.CONTACTinName:
             self.CONTACTname[self.CONTACTtotal - 1] = self.CONTACTnameText
             self.CONTACTnameText = ''
             self.CONTACTinName = False
-
-        if self.CONTACTinPhoneNumber:
+        elif self.CONTACTinFirstName:
+            name = self.CONTACTfirstNameText.replace('\n','').replace('\r','') + ' '
+            self.CONTACTname[self.CONTACTtotal - 1] = name 
+            self.CONTACTfirstNameText = ''
+            self.CONTACTinFirstName = False
+        elif self.CONTACTinLastName:
+            name = self.CONTACTlastNameText.replace('\n','').replace('\r','')
+            self.CONTACTname[self.CONTACTtotal - 1] += name 
+            self.CONTACTlastNameText = ''
+            self.CONTACTinLastName = False
+        elif self.CONTACTinPhoneNumber:
             self.CONTACTphoneNumber[self.CONTACTtotal - 1] = self.CONTACTphoneNumberText
             self.CONTACTphoneNumberText = ''
             self.CONTACTinPhoneNumber = False
-
-        if self.CONTACTinSource:
+        elif self.CONTACTinSource:
             self.CONTACTsource[self.CONTACTtotal - 1] = self.CONTACTsourceText
             self.CONTACTsourceText = ''
             self.CONTACTinSource = False
-
-        if self.CONTACTinLocation:
+        elif self.CONTACTinLocation:
             self.CONTACTlocation[self.CONTACTtotal - 1] = self.CONTACTlocationText
             self.CONTACTlocationText = ''
             self.CONTACTinLocation = False
-
-        if self.CONTACTinRecoveryMethod:
+        elif self.CONTACTinRecoveryMethod:
             self.CONTACTrecoveryMethod[self.CONTACTtotal - 1] = self.CONTACTrecoveryMethodText
             self.CONTACTrecoveryMethodText = ''
             self.CONTACTinRecoveryMethod = False
@@ -1171,9 +2015,70 @@ class ExtractTraces(xml.sax.ContentHandler):
     def __endElementFragmentDEVICE(self):
         if self.DEVICEinSerialNumber:            
             self.DEVICEinSerialNumber = False
-        if self.DEVICEinName:
+        elif self.DEVICEinId:
+            self.DEVICEinId = False
+        elif self.DEVICEinName:
             self.DEVICEinName = False
+        elif self.DEVICEinImsi:
+            self.DEVICEinImsi = False
+        elif self.DEVICEinImei:
+            self.DEVICEinImei = False
+        elif self.DEVICEinModel:
+            self.DEVICEinModel = False
+        elif self.DEVICEinOsVersion:
+            self.DEVICEinOsVersion = False
+        elif self.DEVICEinIccid:
+            self.DEVICEinIccid = False
+        elif self.DEVICEinBluetoothAddress:
+            self.DEVICEinBluetoothAddress = False
+        elif self.DEVICEinBluetoothName:
+            self.DEVICEinBluetoothName = False
 
+    def __endElementFragmentCOOKIE(self):
+        if self.COOKIEinName:
+            self.COOKIEname[self.COOKIEtotal - 1] = self.COOKIEnameText
+            self.COOKIEnameText = ''
+            self.COOKIEinName = False
+        
+        if self.COOKIEinPath:
+            self.COOKIEpath[self.COOKIEtotal - 1] = self.COOKIEpathText
+            self.COOKIEpathText = ''
+            self.COOKIEinPath = False
+        
+        if self.COOKIEinDomain:
+            self.COOKIEdomain[self.COOKIEtotal - 1] = self.COOKIEdomainText
+            self.COOKIEdomainText = ''
+            self.COOKIEinDomain = False
+
+        if self.COOKIEinCreatedDate:
+            self.COOKIEcreatedDate[self.COOKIEtotal - 1] = self.COOKIEcreatedDateText
+            self.COOKIEcreatedDateText = ''
+            self.COOKIEinCreatedDate = False
+        
+        if self.COOKIEinAccessedDate:
+            self.COOKIEaccessedDate[self.COOKIEtotal - 1] = self.COOKIEaccessedDateText
+            self.COOKIEaccessedDateText = ''
+            self.COOKIEinAccessedDate = False
+
+        if self.COOKIEinExpirationDate:
+            self.COOKIEexpirationDate[self.COOKIEtotal - 1] = self.COOKIEexpirationDateText
+            self.COOKIEexpirationDateText = ''
+            self.COOKIEinExpirationDate = False
+
+        if self.COOKIEinSource:
+            self.COOKIEsource[self.COOKIEtotal - 1] = self.COOKIEsourceText
+            self.COOKIEsourceText = ''
+            self.COOKIEinSource = False
+
+        if self.COOKIEinLocation:
+            self.COOKIElocation[self.COOKIEtotal - 1] = self.COOKIElocationText
+            self.COOKIElocationText = ''
+            self.COOKIEinLocation = False
+
+        if self.COOKIEinRecoveryMethod:
+            self.COOKIErecoveryMethod[self.COOKIEtotal - 1] = self.COOKIErecoveryMethodText
+            self.COOKIErecoveryMethodText = ''
+            self.COOKIEinRecoveryMethod = False
 
     def __endElementFragmentEMAIL(self):
         if self.EMAILinSender:
@@ -1240,8 +2145,7 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.FILEtag[self.FILEtotal - 1] =  self.FILEtagText
             self.FILEtagText = ''
             self.FILEinTag = False
-
-        if self.FILEinFileName:
+        elif self.FILEinFileName:
             if self.FILEfileName[self.FILEtotal - 1] == '':
                 self.FILEfileName[self.FILEtotal - 1] =  self.FILEfileNameText
                 self.FILEfileNameText = self.FILEfileNameText.replace('\\', '/')
@@ -1254,8 +2158,7 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.FILEfileLocalPath[self.FILEtotal - 1] = os.path.join(self.FILEbaseLocalPath, fileName)
             self.FILEfileNameText = ''
             self.FILEinFileName = False 
-
-        if self.FILEinImage:
+        elif self.FILEinImage:
             self.FILEimage[self.FILEtotal - 1] =  self.FILEimageText
             self.FILEimageText = self.FILEimageText.replace('\\', '/')
             last_slash = self.FILEimageText.rfind('/')
@@ -1266,87 +2169,153 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.FILEfileLocalPath[self.FILEtotal - 1] =  os.path.join(self.FILEbaseLocalPath, fileName)
             self.FILEimageText = ''
             self.FILEinImage = False 
-
-        if self.FILEinFileExtension:
+        elif self.FILEinFileExtension:
             self.FILEfileExtension[self.FILEtotal - 1] =  self.FILEfileExtensionText
             self.FILEfileExtensionText = ''
             self.FILEinFileExtension = False 
-
-        if self.FILEinFileSize:
+        elif self.FILEinFileSize:
             self.FILEfileSize[self.FILEtotal - 1] =  self.FILEfileSizeText
             self.FILEfileSizeText = ''
             self.FILEinFileSize = False 
-
-        if self.FILEinCreated:
+        elif self.FILEinCreated:
             self.FILEcreated[self.FILEtotal - 1] =  self.FILEcreatedText
             self.FILEcreatedText = ''
             self.FILEinCreated = False 
-
-        if self.FILEinModified:
+        elif self.FILEinModified:
             self.FILEmodified[self.FILEtotal - 1] =  self.FILEmodifiedText
             self.FILEmodifiedText = ''
             self.FILEinModified = False 
-
-        if self.FILEinAccessed:
+        elif self.FILEinAccessed:
             self.FILEaccessed[self.FILEtotal - 1] =  self.FILEaccessedText
             self.FILEaccessedText = ''
             self.FILEinAccessed = False 
-
-        if self.FILEinMD5:
+        elif self.FILEinMD5:
             self.FILEmd5[self.FILEtotal - 1] =  self.FILEmd5Text
             self.FILEmd5Text = ''
             self.FILEinMD5 = False 
-
-        if self.FILEinExifMake:
+        elif self.FILEinExifMake:
             self.FILEexifMake[self.FILEtotal - 1] =  self.FILEexifMakeText
             self.FILEexifMakeText = ''
             self.FILEinExifMake = False 
-
-        if self.FILEinExifModel:
+        elif self.FILEinExifModel:
             self.FILEexifModel[self.FILEtotal - 1] =  self.FILEexifModelText
             self.FILEexifModelText = ''
             self.FILEinExifModel = False 
-
-        if self.FILEinExifLatitude:
+        elif self.FILEinExifLatitude:
             self.FILEexifLatitude[self.FILEtotal - 1] =  self.FILEexifLatitudeText
             self.FILEexifLatitudeText = ''
             self.FILEinExifLatitude = False
-
-        if self.FILEinExifLatitudeRef:
+        elif self.FILEinExifLatitudeRef:
             self.FILEexifLatitudeRef[self.FILEtotal - 1] =  self.FILEexifLatitudeRefText
             self.FILEexifLatitudeRefText = ''
             self.FILEinExifLatitudeRef = False
-
-        if self.FILEinExifLongitude:
+        elif self.FILEinExifLongitude:
             self.FILEexifLongitude[self.FILEtotal - 1] =  self.FILEexifLongitudeText
             self.FILEexifLongitudeText = ''
             self.FILEinExifLongitude = False
-
-        if self.FILEinExifLongitudeRef:
+        elif self.FILEinExifLongitudeRef:
             self.FILEexifLongitudeRef[self.FILEtotal - 1] =  self.FILEexifLongitudeRefText
             self.FILEexifLongitudeRefText = ''
             self.FILEinExifLongitudeRef = False
-
-        if self.FILEinExifAltitude:
+        elif self.FILEinExifAltitude:
             self.FILEexifAltitude[self.FILEtotal - 1] =  self.FILEexifAltitudeText
             self.FILEexifAltitudeText = ''
             self.FILEinExifAltitude = False
-
-        if self.FILEinSource:
+        elif self.FILEinSource:
             self.FILEsource[self.FILEtotal - 1] =  self.FILEsourceText
             self.FILEsourceText = ''
             self.FILEinSource = False 
-
-        if self.FILEinLocation:
+        elif self.FILEinLocation:
             self.FILElocation[self.FILEtotal - 1] =  self.FILElocationText
             self.FILElocationText = ''
             self.FILEinLocation = False 
-
-        if self.FILEinRecoveryMethod:
+        elif self.FILEinRecoveryMethod:
             self.FILErecoveryMethod[self.FILEtotal - 1] =  self.FILErecoveryMethodText
             self.FILErecoveryMethodText = ''
             self.FILEinRecoveryMethod = False 
 
+    def __endElementFragmentFILE_SYS_INFO(self):
+        if self.FILE_SYS_INFOinVolumeSn:
+            self.FILE_SYS_INFOvolumeSn[self.FILE_SYS_INFOtotal - 1] = self.FILE_SYS_INFOvolumeSnText
+            self.FILE_SYS_INFOvolumeSnText = ''
+            self.FILE_SYS_INFOinVolumeSn = False
+        elif self.FILE_SYS_INFOinFileSystem:
+            self.FILE_SYS_INFOfileSystem[self.FILE_SYS_INFOtotal - 1] = self.FILE_SYS_INFOfileSystemText
+            self.FILE_SYS_INFOfileSystemText = ''
+            self.FILE_SYS_INFOinFileSystem = False
+        elif self.FILE_SYS_INFOinCapacity:
+            self.FILE_SYS_INFOcapacity[self.FILE_SYS_INFOtotal - 1] = self.FILE_SYS_INFOcapacityText
+            self.FILE_SYS_INFOcapacityText = ''
+            self.FILE_SYS_INFOinCapacity = False
+        elif self.FILE_SYS_INFOinUnallocated:
+            self.FILE_SYS_INFOunallocated[self.FILE_SYS_INFOtotal - 1] = self.FILE_SYS_INFOunallocatedText
+            self.FILE_SYS_INFOunallocatedText = ''
+            self.FILE_SYS_INFOinUnallocated = False
+        elif self.FILE_SYS_INFOinAllocated:
+            self.FILE_SYS_INFOallocated[self.FILE_SYS_INFOtotal - 1] = self.FILE_SYS_INFOallocatedText
+            self.FILE_SYS_INFOallocatedText = ''
+            self.FILE_SYS_INFOinAllocated = False
+        elif self.FILE_SYS_INFOinOffest:
+            self.FILE_SYS_INFOoffset[self.FILE_SYS_INFOtotal - 1] = self.FILE_SYS_INFOoffsetText
+            self.FILE_SYS_INFOoffsetText = ''
+            self.FILE_SYS_INFOinOffest = False
+
+    def __endElementFragmentLOCATION(self):
+        if self.LOCATIONinType:
+            self.LOCATIONinType = False
+            self.LOCATIONtype[self.LOCATIONtotal - 1] = self.LOCATIONtypeText
+            self.LOCATIONtypeText = ''
+        elif self.LOCATIONinCreated:
+            self.LOCATIONinCreated = False
+            self.LOCATIONcreated[self.LOCATIONtotal - 1] = self.LOCATIONcreatedText
+            self.LOCATIONcreatedText = ''
+        elif self.LOCATIONinLatitude:
+            self.LOCATIONinLatitude = False
+            self.LOCATIONlatitude[self.LOCATIONtotal - 1] = self.LOCATIONlatitudeText
+            self.LOCATIONlatitudeText = ''
+        elif self.LOCATIONinLongitude:
+            self.LOCATIONinLongitude = False
+            self.LOCATIONlongitude[self.LOCATIONtotal - 1] = self.LOCATIONlongitudeText
+            self.LOCATIONlongitudeText = ''
+        elif self.LOCATIONinSource:
+            self.LOCATIONsource[self.LOCATIONtotal - 1] = self.LOCATIONsourceText
+            self.LOCATIONsourceText = ''
+            self.LOCATIONinSource = False
+        elif self.LOCATIONinLocation:
+            self.LOCATIONlocation[self.LOCATIONtotal - 1] = self.LOCATIONlocationText
+            self.LOCATIONlocationText = ''
+            self.LOCATIONinLocation = False
+        elif self.LOCATIONinRecoveryMethod:
+            self.LOCATIONrecoveryMethod[self.LOCATIONtotal - 1] = self.LOCATIONrecoveryMethodText
+            self.LOCATIONrecoveryMethodText = ''
+            self.LOCATIONinRecoveryMethod = False 
+
+    def __endElementFragmentSEARCHED_ITEM(self):
+        if self.SEARCHED_ITEMinValue:
+            self.SEARCHED_ITEMinValue = False
+            self.SEARCHED_ITEMvalue[self.SEARCHED_ITEMtotal - 1] = self.SEARCHED_ITEMvalueText
+            self.SEARCHED_ITEMvalueText = ''
+        elif self.SEARCHED_ITEMinTimeStamp:
+            self.SEARCHED_ITEMinTimeStamp = False
+            self.SEARCHED_ITEMtimeStamp[self.SEARCHED_ITEMtotal - 1] = self.SEARCHED_ITEMtimeStampText
+            self.SEARCHED_ITEMtimeStampText = ''
+        elif self.SEARCHED_ITEMinAppSource:
+            self.SEARCHED_ITEMappSource[self.SEARCHED_ITEMtotal - 1] = self.SEARCHED_ITEMappSourceText
+            self.SEARCHED_ITEMappSourceText = ''
+            self.SEARCHED_ITEMinAppSource = False
+        elif self.SEARCHED_ITEMinSource:
+            self.SEARCHED_ITEMsource[self.SEARCHED_ITEMtotal - 1] = self.SEARCHED_ITEMsourceText
+            self.SEARCHED_ITEMsourceText = ''
+            self.SEARCHED_ITEMinSource = False
+        elif self.SEARCHED_ITEMinLocation:
+            self.SEARCHED_ITEMlocation[self.SEARCHED_ITEMtotal - 1] = self.SEARCHED_ITEMlocationText
+            self.SEARCHED_ITEMlocationText = ''
+            self.SEARCHED_ITEMinLocation = False
+        elif self.SEARCHED_ITEMinRecoveryMethod:
+            self.SEARCHED_ITEMrecoveryMethod[self.SEARCHED_ITEMtotal - 1] = self.SEARCHED_ITEMrecoveryMethodText
+            self.SEARCHED_ITEMrecoveryMethodText = ''
+            self.SEARCHED_ITEMinRecoveryMethod = False            
+            
     def __endElementFragmentSMS(self):
         if self.SMSinPartner:
             self.SMSinPartner = False
@@ -1445,278 +2414,216 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.WEBrecoveryMethodText = ''
             self.WEBinRecoveryMethod = False
 
+    def __endElementFragmentWIRELESS_NET(self):
+        if self.WIRELESS_NETinMacAaddress:
+            self.WIRELESS_NETmacAddress[self.WIRELESS_NETtotal - 1] = \
+               self.WIRELESS_NETmacAddressText
+            self.WIRELESS_NETmacAddressText = ''
+            self.WIRELESS_NETinMacAaddress = False
+        elif self.WIRELESS_NETinChannel:
+            self.WIRELESS_NETchannel[self.WIRELESS_NETtotal - 1] = \
+                self.WIRELESS_NETchannelText
+            self.WIRELESS_NETchannelText = ''
+            self.WIRELESS_NETinChannel = False
+        elif self.WIRELESS_NETinTimeStamp:
+            self.WIRELESS_NETtimeStamp[self.WIRELESS_NETtotal - 1] = \
+                self.WIRELESS_NETtimeStampText
+            self.WIRELESS_NETtimeStampText = ''
+            self.WIRELESS_NETinTimeStamp = False
+        elif self.WIRELESS_NETinLatitude:
+            self.WIRELESS_NETlatitude[self.WIRELESS_NETtotal - 1] = \
+                self.WIRELESS_NETlatitudeText
+            self.WIRELESS_NETlatitudeText = ''
+            self.WIRELESS_NETinLatitude = False
+        elif self.WIRELESS_NETinLongitude:
+            self.WIRELESS_NETlongitude[self.WIRELESS_NETtotal - 1] = \
+                self.WIRELESS_NETlongitudeText
+            self.WIRELESS_NETlongitudeText = ''
+            self.WIRELESS_NETinLongitude = False
+        elif self.WIRELESS_NETinAccuracy:
+            self.WIRELESS_NETaccuracy[self.WIRELESS_NETtotal - 1] = \
+                self.WIRELESS_NETaccuracyText
+            self.WIRELESS_NETaccuracyText = ''
+            self.WIRELESS_NETinAccuracy = False
+        elif self.WIRELESS_NETinSource:
+            self.WIRELESS_NETsource[self.WIRELESS_NETtotal - 1] = \
+                self.WIRELESS_NETsourceText
+            self.WIRELESS_NETsourceText = ''
+            self.WIRELESS_NETinSource = False
+        elif self.WIRELESS_NETinLocation:
+            self.WIRELESS_NETlocation[self.WIRELESS_NETtotal - 1] = \
+                self.WIRELESS_NETlocationText
+            self.WIRELESS_NETlocationText = ''
+            self.WIRELESS_NETinLocation = False
+        elif self.WIRELESS_NETinRecoveryMethod:
+            self.WIRELESS_NETrecoveryMethod[self.WIRELESS_NETtotal - 1] = \
+                self.WIRELESS_NETrecoveryMethodText
+            self.WIRELESS_NETrecoveryMethodText = ''
+            self.WIRELESS_NETinRecoveryMethod = False
+
+    def __endElementFragmentWIN_TIMELINE(self):
+        if self.WIN_TIMELINEinAppName:
+            self.WIN_TIMELINEappName[self.WIN_TIMELINEtotal - 1] = self.WIN_TIMELINEappNameText
+            self.WIN_TIMELINEappNameText = ''
+            self.WIN_TIMELINEinAppName = False
+
+        if self.WIN_TIMELINEinActivityType:
+            self.WIN_TIMELINEactivityType[self.WIN_TIMELINEtotal - 1] = self.WIN_TIMELINEactivityTypeText
+            self.WIN_TIMELINEactivityTypeText = ''
+            self.WIN_TIMELINEinActivityType = False
+
+        if self.WIN_TIMELINEinTimeStamp:
+            self.WIN_TIMELINEtimeStamp[self.WIN_TIMELINEtotal - 1] = self.WIN_TIMELINEtimeStampText
+            self.WIN_TIMELINEtimeStampText = ''
+            self.WIN_TIMELINEinTimeStamp = False
+
+        if self.WIN_TIMELINEinSource:
+            self.WIN_TIMELINEsource[self.WIN_TIMELINEtotal - 1] = self.WIN_TIMELINEsourceText
+            self.WIN_TIMELINEsourceText = ''
+            self.WIN_TIMELINEinSource = False
+
+        if self.WIN_TIMELINEinLocation:
+            self.WIN_TIMELINElocation[self.WIN_TIMELINEtotal - 1] = self.WIN_TIMELINElocationText
+            self.WIN_TIMELINElocationText = ''
+            self.WIN_TIMELINEinLocation = False
+
+        if self.WIN_TIMELINEinRecoveryMethod:
+            self.WIN_TIMELINErecoveryMethod[self.WIN_TIMELINEtotal - 1] = self.WIN_TIMELINErecoveryMethodText
+            self.WIN_TIMELINErecoveryMethodText = ''
+            self.WIN_TIMELINEinRecoveryMethod = False
+
 
 #    It captures each Element when it is closed
     def endElement(self, name):
-        #print('END element ' + name + ', ' + str(self.lineXML))
         if name == 'Fragment':
             self.__endElementFragmentPHONE_NUM()
             if self.CALLin:
                 self.__endElementFragmentCALL()
-            if self.CHATin:
+            elif self.CELL_TOWERin:
+                self.__endElementFragmentCELL_TOWER()
+            elif self.CHATin:
                 self.__endElementFragmentCHAT()
-            if self.CONTACTin:
+            elif self.CONTACTin:
                 self.__endElementFragmentCONTACT()
-            if self.DEVICEin:
+            elif self.COOKIEin:
+                self.__endElementFragmentCOOKIE()
+            elif self.DEVICEin:
                 self.__endElementFragmentDEVICE()
-            if self.FILEin:
+            elif self.FILEin:
                 self.__endElementFragmentFILE()
-            if self.EMAILin:
+            elif self.EMAILin:
                 self.__endElementFragmentEMAIL()
-            if self.SMSin:
+            if self.FILE_SYS_INFOin:
+                self.__endElementFragmentFILE_SYS_INFO()
+            elif self.LOCATIONin:
+                self.__endElementFragmentLOCATION()
+            elif self.SEARCHED_ITEMin:
+                self.__endElementFragmentSEARCHED_ITEM()
+            elif self.SMSin:
                 self.__endElementFragmentSMS()
-            if self.WEBin:
-                self.__endElementFragmentWEB()            
-
-        if name == 'Hit':
+            elif self.WEBin:
+                self.__endElementFragmentWEB()
+            elif self.WIN_TIMELINEin:
+                self.__endElementFragmentWIN_TIMELINE()            
+            elif self.WIRELESS_NETin:
+                self.__endElementFragmentWIRELESS_NET()
+        elif name == 'Hit':
             if self.inHit:
                 self.inHit = False
-
-        if name == 'Artifact':
+        elif name == 'Artifact':
             if self.CALLin:
                 self.CALLin = False
                 self.Observable = False
-
-            if self.CALL_PHONE_NUM_DEVICEin:
+            elif self.CALL_PHONE_NUM_DEVICEin:
                 self.CALL_PHONE_NUM_DEVICEin = False
                 self.Observable = False
-
-            if self.CHATin:
+            elif self.CELL_TOWERin:
+                self.CELL_TOWERin = False
+                self.Observable = False
+            elif self.CHATin:
                 self.CHATin = False
                 self.Observable = False
-
-            if self.CONTACTin:
+            elif self.CONTACTin:
                 self.CONTACTin = False
                 self.Observable = False
-
-            if self.EMAILin:
+            elif self.COOKIEin:
+                self.COOKIEin = False
+                self.Observable = False
+            elif self.DEVICEin:
+                self.DEVICEin = False
+                self.Observable = False
+            elif self.EMAILin:
                 self.EMAILin = False
                 self.Observable = False
-
-            if self.FILEin:
+            elif self.FILEin:
                 self.FILEin = False
+                self.Observable = False                        
+            elif self.FILE_SYS_INFOin:
+                self.FILE_SYS_INFOin = False
                 self.Observable = False
-            
-            if self.SMSin:
+            elif self.LOCATIONin:
+                self.LOCATIONin = False
+                self.Observable = False
+            elif self.SEARCHED_ITEMin:
+                self.SEARCHED_ITEMin = False
+                self.Observable = False 
+            elif self.SMSin:
                 self.SMSin = False
                 self.Observable = False 
-
-            if self.WEBin:
+            elif self.WEBin:
                 self.WEBin = False
-                self.Observable = False                
-
+                self.Observable = False
+            elif self.WIRELESS_NETin:
+                self.WIRELESS_NETin = False
+                self.Observable = False
+            elif self.WIN_TIMELINEin:
+                self.WIN_TIMELINEin = False
+                self.Observable = False               
+            
 #---    it captures the value/character inside the Text Elements
     def characters(self, ch):        
-#---    CALL processing
-#        
         if self.CALLin:
-            if self.CALLinPartner:
-                self.CALLpartnerText += ch
-            if self.CALLinPartnerName:
-                self.CALLpartnerNameText += ch
-            if self.CALLinDirection:
-                self.CALLdirectionText += ch
-            if self.CALLinTimeStamp:
-                self.CALLtimeStampText += ch
-            if self.CALLinDuration:
-                self.CALLdurationText += ch
-            if self.CALLinSource:
-                self.CALLsourceText += ch
-            if self.CALLinLocation:
-                self.CALLlocationText += ch
-            if self.CALLinRecoveryMethod:
-                self.CALLrecoveyMethodText += ch
-
-        if self.CALL_PHONE_NUM_DEVICE_VALUEin:            
+            self.__charactersCALL(ch)           
+        elif self.CELL_TOWERin:
+            self.__charactersCELL_TOWER(ch)
+        elif self.CALL_PHONE_NUM_DEVICE_VALUEin:            
             if self.CALLphoneNumberDevice == 'DEVICE_PHONE_NUMBER':
                 self.CALLphoneNumberDevice = ch
-
-        if self.CALL_PHONE_NAME_DEVICE_VALUEin:            
+        elif self.CALL_PHONE_NAME_DEVICE_VALUEin:            
             self.CALLphoneNameDevice += ch
-
-#---    CHAT processing
-#        
-        if self.CHATin:
-            if self.CHATinSender:
-                self.CHATsenderText += ch
-            if self.CHATinReceiver:
-                self.CHATreceiverText += ch
-            if self.CHATinPartner:
-                self.CHATpartnerText += ch
-            if self.CHATinDateTimeSent:
-                self.CHATdateTimeSentText += ch
-            if self.CHATinDateTimeReceived:
-                self.CHATdateTimeReceivedText += ch
-            if self.CHATinDateTime:
-                self.CHATdateTimeText += ch                
-            if self.CHATinMessage:
-                self.CHATmessageText += ch
-            if self.CHATinMessageStatus:
-                self.CHATmessageStatusText += ch
-            if self.CHATinMessageType:
-                self.CHATmessageTypeText += ch
-            if self.CHATinSource:
-                self.CHATsourceText += ch
-            if self.CHATinLocation:
-                self.CHATlocationText += ch
-            if self.CHATinRecoveryMethod:
-                self.CHATrecoveryMethodText += ch
-
-#---    CONTACT processing
-#        
-        if self.CONTACTin:
-            if self.CONTACTinName:
-                self.CONTACTnameText += ch
-            if self.CONTACTinPhoneNumber:
-                self.CONTACTphoneNumberText += ch
-            if self.CONTACTinSource:
-                self.CONTACTsourceText += ch
-            if self.CONTACTinLocation:
-                self.CONTACTlocationText += ch
-            if self.CONTACTinRecoveryMethod:
-                self.CONTACTrecoveryMethodText += ch
-
-#---    DEVICE processing
-#        
-        if self.DEVICEin:
-            if self.DEVICEinSerialNumber:
-                if self.DEVICEserialNumberText == '':
-                    self.DEVICEserialNumberText += ch
-            if self.DEVICEinName:
-                if self.DEVICEnameText == '':
-                    self.DEVICEnameText += ch
-
-#---    EMAIL processing
-#        
-        if self.EMAILin:
-            if self.EMAILinSender:
-                self.EMAILsenderText += ch
-            if self.EMAILinRecipients:
-                self.EMAILrecipientText += ch
-            if self.EMAILinCC:
-                self.EMAILccText += ch
-            if self.EMAILinBCC:
-                self.EMAILbccText += ch
-            if self.EMAILinDateTime:
-                self.EMAILdateTimeText += ch
-            if self.EMAILinSubject:
-                self.EMAILsubjectText += ch
-            if self.EMAILinBody:
-                self.EMAILbodyText += ch
-            if self.EMAILinAttachment:
-                self.EMAILattachmentText += ch
-            if self.EMAILinSource:
-                self.EMAILsourceText += ch
-            if self.EMAILinLocation:
-                self.EMAILlocationText += ch
-            if self.EMAILinRecoveryMethod:
-                self.EMAILrecoveryMethodText += ch
-
-#---    FILE processing
-#        
-        if self.FILEin:
-            if self.FILEinTag:
-                self.FILEtagText += ch
-            if self.FILEinFileName:
-                self.FILEfileNameText += ch
-            if self.FILEinImage:
-                self.FILEimageText += ch
-            if self.FILEinFileExtension:
-                self.FILEfileExtensionText += ch
-            if self.FILEinFileSize:
-                self.FILEfileSizeText += ch
-            if self.FILEinCreated:
-                self.FILEcreatedText += ch
-            if self.FILEinModified:
-                self.FILEmodifiedText += ch
-            if self.FILEinAccessed:
-                self.FILEaccessedText += ch
-            if self.FILEinMD5:
-                self.FILEmd5Text += ch
-            if self.FILEinExifMake:
-                self.FILEexifMakeText += ch
-            if self.FILEinExifModel:
-                self.FILEexifModelText += ch 
-            if self.FILEinExifLatitudeRef:
-                self.FILEexifLatitudeRefText += ch
-            if self.FILEinExifLatitude:
-                self.FILEexifLatitudeText += ch
-            if self.FILEinExifLongitudeRef:
-                self.FILEexifLongitudeRef += ch
-            if self.FILEinExifLongitude:
-                self.FILEexifLongitudeText += ch
-            if self.FILEinExifAltitude:
-                self.FILEexifAltitudeText += ch
-            if self.FILEinSource:
-                self.FILEsourceText += ch
-            if self.FILEinLocation:
-                self.FILElocationText += ch
-            if self.FILEinRecoveryMethod:
-                self.FILErecoveryMethodText += ch
-
-#---    SMS processing
-#        
-        if self.SMSin:
-            if self.SMSinPartner:
-                self.SMSpartnerText += ch
-
-            if self.SMSinRecipient:
-                self.SMSrecipientText += ch
-
-            if self.SMSinSender:
-                self.SMSsenderText += ch
-
-            if self.SMSinReceivedDateTime:
-                self.SMSreceivedDateTimeText += ch
-
-            if self.SMSinSentDateTime:
-                self.SMSsentDateTimeText += ch
-
-            if self.SMSinMessage:
-                self.SMSmessageText += ch
-
-            if self.SMSinDirection:
-                self.SMSdirectionText += ch
-
-            if self.SMSinSource:
-                self.SMSsourceText += ch
-
-            if self.SMSinLocation:
-                self.SMSlocationText += ch
-
-            if self.SMSinRecoveryMethod:
-                self.SMSrecoveryMethodText += ch
-
-#---    WEB_HISTORY processing
-#        
-        if self.WEBin:
-            if self.WEBinUrl:
-                self.WEBurlText += ch
-
-            if self.WEBinLastVisited:
-                self.WEBlastVisitedText += ch
-
-            if self.WEBinTitle:
-                self.WEBtitleText += ch
-
-            if self.WEBinVisitCount:
-                self.WEBvisitCountText += ch
-
-            if self.WEBinSource:
-                self.WEBsourceText += ch
-
-            if self.WEBinLocation:
-                self.WEBlocationText += ch
-
-            if self.WEBinRecoveryMethod:
-                self.WEBrecoveryMethodText += ch                
-
+        elif self.CHATin:
+            self.__charactersCHAT(ch)
+        elif self.CONTACTin:
+            self.__charactersCONTACT(ch)
+        elif self.COOKIEin:
+            self.__charactersCOOKIE(ch)
+        elif self.DEVICEin:
+            self.__charactersDEVICE(ch)
+        elif self.EMAILin:
+            self.__charactersEMAIL(ch)
+        elif self.FILEin:
+            self.__charactersFILE(ch)
+        elif self.FILE_SYS_INFOin:
+            self.__charactersFILE_SYS_INFO(ch)
+        elif self.LOCATIONin:
+            self.__charactersLOCATION(ch)
+        elif self.SEARCHED_ITEMin:
+            self.__charactersSEARCHED_ITEM(ch)
+        elif self.SMSin:
+            self.__charactersSMS(ch)
+        elif self.WEBin:
+            self.__charactersWEB(ch)
+        elif self.WIRELESS_NETin:
+            self.__charactersWIRELESS_NET(ch)
+        elif self.WIN_TIMELINEin:
+            self.__charactersWIN_TIMELINE(ch)            
 
 if __name__ == '__main__':
 
+    C_CYAN = '\033[36m'
+    C_BLACK = '\033[0m'
 #--- debug: ctime processing
-#
-    tic=timeit.default_timer()
+#    
 
     parserArgs = argparse.ArgumentParser(description='Parser to convert XML Report from AXIOM Process into CASE-JSON-LD standard.')
 
@@ -1755,14 +2662,15 @@ if __name__ == '__main__':
         print('\tFile Debug:\t\t' + args.outputDebug)
 
     print('\n*--- Input paramaters end')
-    print('\n\n*** Start processing\n')
+    print('\n\n' + C_CYAN + '*** Start processing: ' + strftime("%Y-%m-%d %H:%M:%S", localtime()) + C_BLACK + '\n')
 
 #---    baseLocalPath is for setting the fileLocalPath property of FileFacet 
 #       Observable. 
 #    
     baseLocalPath = ''
 
-    gadget = AXIOMgadget(args.inFileXML, args.outCASE_JSON, args.inTypeEvidence, baseLocalPath)    
+    gadget = AXIOMgadget(args.inFileXML, args.outCASE_JSON, 
+        args.inTypeEvidence, baseLocalPath, verbose=True)    
     
     Handler = gadget.processXmlReport()
     
@@ -1781,24 +2689,4 @@ if __name__ == '__main__':
         debug.writeDebugWEB(Handler)
         debug.closeDebug() 
 
-
-    
-
-    toc=timeit.default_timer()
-    elapsedTime = round(toc - tic, 2)
-    (ss, ms) = divmod(elapsedTime, 1)
-    elapsedMm = str(int(ss) // 60)
-    elapsedSs = str(int(ss) % 60)
-    elapsedMs = str(round(ms, 2))[2:]
-    elapsedTime = elapsedMm + ' min. ' +  elapsedSs + ' sec. and ' + \
-    elapsedMs + ' hundredths'
-    print(Handler.C_green + '\n*** End processing, elapsed time: ' + \
-        elapsedTime + '\n\n' + Handler.C_end)
-
-# else:    
-#     xmlFile = '../CASE-dataset.xml.reports/AXIOM/ANDROID/19_AXIOM_ANDROID_CROSSOVER.xml'
-#     jsonFile = './_19-AXIOM-gadget.json'   
-#     print("start XML processing " + jsonFile)     
-#     gadget = AXIOMgadget(xmlFile, jsonFile, 'mobile')
-#     gadget.processXmlReport()
-#     print("end XML processing, created " + jsonFile)     
+    gadget.show_elapsed_time(gadget.tic_start, 'End processing')
