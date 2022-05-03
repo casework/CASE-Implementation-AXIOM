@@ -127,6 +127,15 @@ class AXIOMgadget():
                 Handler.WIRELESS_NETlatitude, Handler.WIRELESS_NETtimeStamp,  
                 Handler.WIRELESS_NETaccuracy, Handler.WIRELESS_NETsource, 
                 Handler.WIRELESS_NETlocation, Handler.WIRELESS_NETrecoveryMethod)
+
+            caseTrace.writeDeviceEvent(Handler.EVENT_LOCKid, Handler.EVENT_LOCKdeviceStatus, 
+                Handler.EVENT_LOCKdateTime, Handler.EVENT_LOCKsource, 
+                Handler.EVENT_LOCKlocation, Handler.EVENT_LOCKrecoveryMethod)
+
+            caseTrace.writeAppUsage(Handler.EVENT_APP_USEid, Handler.EVENT_APP_USEapplication, 
+                Handler.EVENT_APP_USEstartTime, Handler.EVENT_APP_USEendTime,
+                Handler.EVENT_APP_USEsource, Handler.EVENT_APP_USElocation, 
+                Handler.EVENT_APP_USErecoveryMethod)
         
         caseTrace.writeSearched_Item(Handler.SEARCHED_ITEMid, Handler.SEARCHED_ITEMvalue,
                 Handler.SEARCHED_ITEMtimeStamp, Handler.SEARCHED_ITEMappSource, 
@@ -443,9 +452,58 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.COOKIElocation = []
         self.COOKIErecoveryMethod = []
 
+#---    EVENT Artifacts
+#        
+        self.EVENT_LOCK_PATTERN = ('KnowledgeC Device Lock States')
+        self.EVENT_LOCKin = False
+        self.EVENT_LOCKinDeviceStatus= False
+        self.EVENT_LOCKinDateTime= False
+        self.EVENT_LOCKinSource = False
+        self.EVENT_LOCKinLocation = False
+        self.EVENT_LOCKinRecoveryMethod = False
+
+        self.EVENT_LOCKdeviceStatusText = ''
+        self.EVENT_LOCKdateTimeText = ''
+        self.EVENT_LOCKsourceText =  ''
+        self.EVENT_LOCKlocationText = ''
+        self.EVENT_LOCKrecoveryMethodText = ''
+
+        self.EVENT_LOCKtotal = 0
+        self.EVENT_LOCKid = []
+        self.EVENT_LOCKdeviceStatus = []
+        self.EVENT_LOCKdateTime = []
+        self.EVENT_LOCKsource = []
+        self.EVENT_LOCKlocation = []
+        self.EVENT_LOCKrecoveryMethod = []
+
+        self.EVENT_APP_USE_PATTERN = ('KnowledgeC Application Usage')
+        self.EVENT_APP_USEin = False
+        self.EVENT_APP_USEinApplication= False
+        self.EVENT_APP_USEinStartTime= False
+        self.EVENT_APP_USEinEndTime= False
+        self.EVENT_APP_USEinSource = False
+        self.EVENT_APP_USEinLocation = False
+        self.EVENT_APP_USEinRecoveryMethod = False
+
+        self.EVENT_APP_USEapplicationText = ''
+        self.EVENT_APP_USEstartTimeText = ''
+        self.EVENT_APP_USEendTimeText =  ''
+        self.EVENT_APP_USEsourceText = ''
+        self.EVENT_APP_USElocationText = ''
+        self.EVENT_APP_USErecoveryMethodText = ''
+
+        self.EVENT_APP_USEtotal = 0
+        self.EVENT_APP_USEid = []
+        self.EVENT_APP_USEapplication = []
+        self.EVENT_APP_USEstartTime = []
+        self.EVENT_APP_USEendTime = []
+        self.EVENT_APP_USEsource = []
+        self.EVENT_APP_USElocation = []
+        self.EVENT_APP_USErecoveryMethod = []
+
 #---    EMAIL Artifacts, not yet extracted: Outlook Emails
 #        
-        self.EMAIL_PATTERN = ('Apple Mail', 'Gmail Emails', 'Android Emails')
+        self.EMAIL_PATTERN = ('Apple Mail', 'Gmail Emails', 'Android Emails', 'Apple Mail Fragments')
         self.EMAILin = False
         self.EMAILinSender= False
         self.EMAILinRecipients= False
@@ -485,7 +543,7 @@ class ExtractTraces(xml.sax.ContentHandler):
         self.EMAILattachment = []
         self.EMAILsource = []
         self.EMAILlocation = []
-        self.EMAILrecoveryMethod = []
+        self.EMAILrecoveryMethod = []        
 
 #---    FILE  Artifacts
 #
@@ -925,6 +983,30 @@ class ExtractTraces(xml.sax.ContentHandler):
             if self.DEVICEosVersionText == '':
                 self.DEVICEosVersionText += ch
 
+    def __charactersEVENT_LOCK(self, ch):
+        if self.EVENT_LOCKinDeviceStatus:
+            self.EVENT_LOCKdeviceStatusText += ch
+        elif self.EVENT_LOCKinDateTime:
+            self.EVENT_LOCKdateTimeText += ch
+        elif self.EVENT_LOCKinSource:
+            self.EVENT_LOCKsourceText += ch
+        elif self.EVENT_LOCKinLocation:
+            self.EVENT_LOCKlocationText += ch
+        elif self.EVENT_LOCKinRecoveryMethod:
+            self.EVENT_LOCKrecoveryMethodText += ch
+
+    def __charactersEVENT_APP_USE(self, ch):
+        if self.EVENT_APP_USEinStartTime:
+            self.EVENT_APP_USEstartTimeText += ch
+        elif self.EVENT_APP_USEinEndTime:
+            self.EVENT_APP_USEendTimeText += ch
+        elif self.EVENT_APP_USEinApplication:
+            self.EVENT_APP_USEapplicationText += ch
+        elif self.EVENT_APP_USEinLocation:
+            self.EVENT_APP_USElocationText += ch
+        elif self.EVENT_APP_USEinRecoveryMethod:
+            self.EVENT_APP_USErecoveryMethodText += ch
+
     def __charactersEMAIL(self, ch):
         if self.EMAILinSender:
             self.EMAILsenderText += ch
@@ -1279,6 +1361,32 @@ class ExtractTraces(xml.sax.ContentHandler):
         elif attrFragment == 'Bluetooth Address':
             self.DEVICEinBluetoothAddress = True
 
+    def __startElementFragmentEVENT_APP_USE(self, attrFragment):
+        if attrFragment == 'State':  
+            self.EVENT_LOCKinDeviceStatus = True 
+        elif attrFragment.find('Start Date/Time') > -1:  
+            self.EVENT_APP_USEinStartTime = True 
+        elif attrFragment.find('End Date/Time') > -1:  
+            self.EVENT_APP_USEinEndTime = True 
+        elif attrFragment == 'Application Name':  
+            self.EVENT_APP_USEinApplication = True
+        elif attrFragment == 'Location':  
+            self.EVENT_APP_USEinLocation = True 
+        elif attrFragment.lower() == 'recovery method':  
+            self.EVENT_APP_USEinRecoveryMethod = True 
+
+    def __startElementFragmentEVENT_LOCK(self, attrFragment):
+        if attrFragment == 'State':  
+            self.EVENT_LOCKinDeviceStatus = True 
+        elif attrFragment.find('Recorded Date/Time') > -1:  
+            self.EVENT_LOCKinDateTime = True 
+        elif attrFragment == 'Source':  
+            self.EVENT_LOCKinSource = True
+        elif attrFragment == 'Location':  
+            self.EVENT_LOCKinLocation = True 
+        elif attrFragment.lower() == 'recovery method':  
+            self.EVENT_LOCKinRecoveryMethod = True 
+
     def __startElementFragmentEMAIL(self, attrFragment):
         if attrFragment in ('Sender', 'From Address', 'From'):  
             self.EMAILinSender = True 
@@ -1312,7 +1420,6 @@ class ExtractTraces(xml.sax.ContentHandler):
 
         if attrFragment.lower() == 'recovery method':  
             self.EMAILinRecoveryMethod = True 
-
     
     def __startElementFragmentFILE(self, attrFragment):
         if attrFragment == 'Tags':
@@ -1526,6 +1633,14 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.Observable = True
                 self.skipLine = True
                 self.EMAILappName = attrName
+            elif  attrName in self.EVENT_LOCK_PATTERN:
+                self.EVENT_LOCKin = True
+                self.Observable = True
+                self.skipLine = True
+            elif  attrName in self.EVENT_APP_USE_PATTERN:
+                self.EVENT_APP_USEin = True
+                self.Observable = True
+                self.skipLine = True
             elif  attrName in self.FILE_PATTERN:
                 self.FILEin = True
                 self.Observable = True 
@@ -1653,6 +1768,25 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.EMAILsource.append('')
                 self.EMAILlocation.append('')
                 self.EMAILrecoveryMethod.append('')
+            elif self.EVENT_LOCKin:
+                self.EVENT_LOCKtotal += 1
+                self.printObservable('EVENT LOCK', self.EVENT_LOCKtotal)
+                self.EVENT_LOCKid.append(str(self.EVENT_LOCKtotal))
+                self.EVENT_LOCKdateTime.append('')
+                self.EVENT_LOCKdeviceStatus.append('')
+                self.EVENT_LOCKsource.append('')
+                self.EVENT_LOCKlocation.append('')
+                self.EVENT_LOCKrecoveryMethod.append('')
+            elif self.EVENT_APP_USEin:
+                self.EVENT_APP_USEtotal += 1
+                self.printObservable('EVENT APP USE', self.EVENT_APP_USEtotal)
+                self.EVENT_APP_USEid.append(str(self.EVENT_APP_USEtotal))
+                self.EVENT_APP_USEstartTime.append('')
+                self.EVENT_APP_USEendTime.append('')
+                self.EVENT_APP_USEapplication.append('')
+                self.EVENT_APP_USEsource.append('')
+                self.EVENT_APP_USElocation.append('')
+                self.EVENT_APP_USErecoveryMethod.append('')
             elif self.FILEin:
                 self.FILEtotal += 1
                 self.printObservable('FILE', self.FILEtotal)
@@ -1774,6 +1908,10 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.__startElementFragmentPHONE_NUM(attrName)
             elif self.EMAILin and self.inHit:
                 self.__startElementFragmentEMAIL(attrName)
+            elif self.EVENT_LOCKin and self.inHit:
+                self.__startElementFragmentEVENT_LOCK(attrName)
+            elif self.EVENT_APP_USEin and self.inHit:
+                self.__startElementFragmentEVENT_APP_USE(attrName)
             elif self.FILEin and self.inHit:
                 self.__startElementFragmentFILE(attrName)
             elif self.FILE_SYS_INFOin and self.inHit:
@@ -2079,6 +2217,71 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.COOKIErecoveryMethod[self.COOKIEtotal - 1] = self.COOKIErecoveryMethodText
             self.COOKIErecoveryMethodText = ''
             self.COOKIEinRecoveryMethod = False
+
+    def __endElementFragmentEVENT_APP_USE(self):
+        if self.EVENT_APP_USEinStartTime:
+            self.EVENT_APP_USEstartTime[self.EVENT_APP_USEtotal - 1] = \
+                self.EVENT_APP_USEstartTimeText
+            self.EVENT_APP_USEstartTimeText = ''
+            self.EVENT_APP_USEinStartTime = False
+
+        if self.EVENT_APP_USEinEndTime:
+            self.EVENT_APP_USEendTime[self.EVENT_APP_USEtotal - 1] = \
+                self.EVENT_APP_USEendTimeText
+            self.EVENT_APP_USEendTimeText = ''
+            self.EVENT_APP_USEinEndTime = False
+        
+        if self.EVENT_APP_USEinApplication:
+            self.EVENT_APP_USEapplication[self.EVENT_APP_USEtotal - 1] = \
+                self.EVENT_APP_USEapplicationText
+            self.EVENT_APP_USEapplicationText = ''
+            self.EVENT_APP_USEinApplication = False
+
+        if self.EVENT_APP_USEinSource:
+            self.EVENT_APP_USEsource[self.EVENT_APP_USEtotal - 1] = \
+                self.EVENT_APP_USEsourceText
+            self.EVENT_APP_USEsourceText = ''
+            self.EVENT_APP_USEinSource = False
+
+        if self.EVENT_APP_USEinLocation:
+            self.EVENT_APP_USElocation[self.EVENT_APP_USEtotal - 1] = \
+                self.EVENT_APP_USElocationText
+            self.EVENT_APP_USElocationText = ''
+            self.EVENT_APP_USEinLocation = False
+
+        if self.EVENT_APP_USEinRecoveryMethod:
+            self.EVENT_APP_USErecoveryMethod[self.EVENT_APP_USEtotal - 1] = \
+                self.EVENT_APP_USErecoveryMethodText
+            self.EVENT_APP_USErecoveryMethodText = ''
+            self.EVENT_APP_USEinRecoveryMethod = False
+
+    def __endElementFragmentEVENT_LOCK(self):
+        if self.EVENT_LOCKinDateTime:
+            self.EVENT_LOCKdateTime[self.EVENT_LOCKtotal - 1] = self.EVENT_LOCKdateTimeText
+            self.EVENT_LOCKdateTimeText = ''
+            self.EVENT_LOCKinDateTime = False
+        
+        if self.EVENT_LOCKinDeviceStatus:
+            self.EVENT_LOCKdeviceStatus[self.EVENT_LOCKtotal - 1] = \
+                self.EVENT_LOCKdeviceStatusText
+            self.EVENT_LOCKdeviceStatusText = ''
+            self.EVENT_LOCKinDeviceStatus = False
+
+        if self.EVENT_LOCKinSource:
+            self.EVENT_LOCKsource[self.EVENT_LOCKtotal - 1] = self.EVENT_LOCKsourceText
+            self.EVENT_LOCKsourceText = ''
+            self.EVENT_LOCKinSource = False
+
+        if self.EVENT_LOCKinLocation:
+            self.EVENT_LOCKlocation[self.EVENT_LOCKtotal - 1] = self.EVENT_LOCKlocationText
+            self.EVENT_LOCKlocationText = ''
+            self.EVENT_LOCKinLocation = False
+
+        if self.EVENT_LOCKinRecoveryMethod:
+            self.EVENT_LOCKrecoveryMethod[self.EVENT_LOCKtotal - 1] = \
+                self.EVENT_LOCKrecoveryMethodText
+            self.EVENT_LOCKrecoveryMethodText = ''
+            self.EVENT_LOCKinRecoveryMethod = False
 
     def __endElementFragmentEMAIL(self):
         if self.EMAILinSender:
@@ -2513,7 +2716,11 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.__endElementFragmentFILE()
             elif self.EMAILin:
                 self.__endElementFragmentEMAIL()
-            if self.FILE_SYS_INFOin:
+            elif self.EVENT_LOCKin:
+                self.__endElementFragmentEVENT_LOCK()
+            elif self.EVENT_APP_USEin:
+                self.__endElementFragmentEVENT_APP_USE()
+            elif self.FILE_SYS_INFOin:
                 self.__endElementFragmentFILE_SYS_INFO()
             elif self.LOCATIONin:
                 self.__endElementFragmentLOCATION()
@@ -2551,6 +2758,12 @@ class ExtractTraces(xml.sax.ContentHandler):
                 self.Observable = False
             elif self.DEVICEin:
                 self.DEVICEin = False
+                self.Observable = False
+            elif self.EVENT_LOCKin:
+                self.EVENT_LOCKin = False
+                self.Observable = False
+            elif self.EVENT_APP_USEin:
+                self.EVENT_APP_USEin = False
                 self.Observable = False
             elif self.EMAILin:
                 self.EMAILin = False
@@ -2601,6 +2814,10 @@ class ExtractTraces(xml.sax.ContentHandler):
             self.__charactersDEVICE(ch)
         elif self.EMAILin:
             self.__charactersEMAIL(ch)
+        elif self.EVENT_LOCKin:
+            self.__charactersEVENT_LOCK(ch)
+        elif self.EVENT_APP_USEin:
+            self.__charactersEVENT_APP_USE(ch)
         elif self.FILEin:
             self.__charactersFILE(ch)
         elif self.FILE_SYS_INFOin:

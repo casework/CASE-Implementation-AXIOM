@@ -146,6 +146,65 @@ class AXIOMtoJSON:
 		return itemFound
 
 
+	def __generateTraceDeviceEvent(self, d_event_id, d_event_timeStamp, 
+		d_event_eventType, d_event_value):
+
+		d_event_timeStamp = self.__cleanDate(d_event_timeStamp)		
+		d_event_value = self.__cleanJSONtext(d_event_value)
+		
+		uuid = "kb:" + AXIOMtoJSON.__createUUID()
+		object_dict = {
+			"@id":uuid,
+			"@type":"uco-observable:ObservableObject", 
+			"uco-observable:hasChanged":True,
+			"uco-core:hasFacet":[
+				{
+					"@type":"uco-observable:EventFacet",
+					"uco-observable:observableCreatedTime":{
+						"@type":"xsd:dateTime",
+						"@value":d_event_timeStamp
+					},
+					"uco-observable:eventType":d_event_eventType,
+					"uco-observable:eventText":d_event_value
+				}
+			]
+		}
+		object_str = json.dumps(object_dict, indent = 4)
+		self.FileOut.write(object_str + ',\n')
+		return uuid
+
+	def __generateTraceAppUsage(self, d_event_id, d_event_startTime, 
+		d_event_endTime, d_event_eventType, d_event_value):
+	
+		uuid = "kb:" + AXIOMtoJSON.__createUUID()
+		object_dict = {
+			"@id":uuid,
+			"@type":"uco-observable:ObservableObject", 
+			"uco-observable:hasChanged":True,
+			"uco-core:hasFacet":[
+				{
+					"@type":"uco-observable:EventFacet",
+					"uco-observable:observableCreatedTime":{
+						"@type":"xsd:dateTime",
+						"@value":d_event_startTime
+					},
+					"uco-observable:observableStartTime":{
+						"@type":"xsd:dateTime",
+						"@value":d_event_startTime
+					},
+					"uco-observable:observableEndTime":{
+						"@type":"xsd:dateTime",
+						"@value":d_event_endTime
+					},
+					"uco-observable:eventType":d_event_eventType,
+					"uco-observable:eventText":d_event_value
+				}
+			]
+		}
+		object_str = json.dumps(object_dict, indent = 4)
+		self.FileOut.write(object_str + ',\n')
+		return uuid
+
 	def __checkEmailAddress(self, address):
 		if address in self.EMAILaddressUuid.keys():
 			uuid = self.EMAILaddressUuid.get(address)
@@ -1584,7 +1643,7 @@ class AXIOMtoJSON:
 						},
 						"uco-observable:urlHistoryEntry": [
 							{
-								"@type":"uco-observable:URLHistoryEntry",
+								#"@type":"uco-observable:URLHistoryEntry",
 								"uco-observable:firstVisit":{
 									"@type":"xsd:dateTime",
 									"@value":"1900-01-01T08:00:00"
@@ -2028,6 +2087,30 @@ class AXIOMtoJSON:
 				uuidThread = self.__generateThreadMessages(self.CHATids[i][j], self.CHATthread, 
 								[CHATmsgFrom, CHATmsgTo])
 				self.__generateChainOfEvidence(CHATsource[i], CHATlocation[i], chatUuid)
+
+	def writeDeviceEvent(self, EVENT_LOCKid, EVENT_LOCKstatus, 
+                EVENT_LOCKdateTime, EVENT_LOCKsource, EVENT_LOCKlocation, 
+                EVENT_LOCKrecoveryMethod):
+		for i, device_event_id in enumerate(EVENT_LOCKid):
+			uuid= self.__generateTraceDeviceEvent(device_event_id, 
+				EVENT_LOCKdateTime[i], 'Device Lock Status', EVENT_LOCKstatus[i])
+			if uuid != '':
+				self.__generateChainOfEvidence(EVENT_LOCKsource[i], 
+					EVENT_LOCKlocation[i], uuid)
+
+	def writeAppUsage(self, EVENT_APP_USEid, EVENT_APP_USEapplication, 
+                EVENT_APP_USEstartTime, EVENT_APP_USEendTime,
+                EVENT_APP_USEsource, EVENT_APP_USElocation, 
+                EVENT_APP_USErecoveryMethod):
+
+		for i, application in enumerate(EVENT_APP_USEapplication):
+			uuid= self.__generateTraceAppUsage(EVENT_APP_USEid[i], 
+				EVENT_APP_USEstartTime[i], EVENT_APP_USEendTime[i],
+				'Application Usage', application)
+			if uuid != '':
+				self.__generateChainOfEvidence(EVENT_APP_USEsource[i], 
+					EVENT_APP_USElocation[i], uuid)
+
 
 	def writeEmail(self, EMAILid, EMAILapp, EMAILidentifierFROM, 
 				EMAILidentifiersTO, EMAILidentifiersCC, EMAILidentifiersBCC, 
