@@ -5,7 +5,11 @@ import os
 import re
 import json
 import re
+import sys
 #import logging
+from case_builder import *
+from datetime import datetime
+from pytz import timezone
 
 class AXIOMtoJSON:
 	'''
@@ -31,7 +35,7 @@ class AXIOMtoJSON:
 
 # default value for Hash Method value not provided
 #
-	HASH_V = '1' * 76
+	HASH_V = '2' * 76
 
 # default value for the property referrerUrl of the URLHistoryFacet class
 #
@@ -41,15 +45,18 @@ class AXIOMtoJSON:
 #
 	LOCATION = 'Unknown location'
 
-	def __init__(self, fileOut, commaLine=True):
-	# to be defined
+	def __init__(self, json_output=None, case_bundle=None, commaLine=True):
+#---	logging
+#		
 		#logging.basicConfig(filename='_axiom_log.txt', level=logging.INFO,
 		#	filemode='w', format='%(message)s')
-		self.FileOut = fileOut
+		self.bundle = case_bundle
+		self.FileOut = json_output
 		self.commaLine = commaLine
 		self.phoneNumberList = []
 		self.phoneNameList = []
 		self.phoneUuidList = []
+		self.object_phone_owner = None
 		
 		self.appNameList = []
 		self.appAccountUsernameList = []
@@ -61,12 +68,12 @@ class AXIOMtoJSON:
 		self.CHATaccountIdList = []
 		self.CHATthread = []
 
-		self.DEVICEuuid = ''
+		self.observable_device = ''
 
 		self.EMAILaddressUuid = {}
 		self.EMAILregex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
 		self.phoneOwnerNumber = ''
-		self.phoneOwnerUuid = ''
+		self.observable_phone_owner = None
 		self.FILEuuid = {}
 		self.FILEid = []
 
@@ -120,21 +127,58 @@ class AXIOMtoJSON:
 			new_text = new_text.replace('�', '')
 			return new_text
 
+	
+	def __convert_str_to_datetime(self, str_date):
+		if str_date.strip() == "":
+			str_date = "1900-01-01T00:00:00"
+		if str_date.find('+') > -1:
+			date_time = datetime.strptime(str_date, 
+				'%Y-%m-%dT%H:%M:%S.%f%z')
+		else:
+			date_time = datetime.strptime(str_date, 
+				'%Y-%m-%dT%H:%M:%S')
+		
+		return date_time
+	
+	def __checkAppName(self, name):
+		if name in self.appNameList: 
+			idx = self.appNameList.index(name)
+			observable_app = self.appIDList[idx]
+		else:
+			observable_app = self.__generateTraceAppName(name)
+			self.appNameList.append(name)
+			self.appIDList.append(observable_app)
+		
+		return observable_app
+
+	def __checkChatParticipant(self, chat_id, chat_name, chat_source, id_app):
+		if chat_id.strip() in self.CHATparticipantsIdList: 
+			idx = self.CHATparticipantsIdList.index(chat_id.strip())
+			observable_chat_account = self.CHATaccountIdList[idx]
+		else:
+			self.CHATparticipantsNameList.append(chat_name.strip())
+			observable_chat_account = self.__generateTraceApplicationAccount(chat_id.strip(), 
+				chat_name.strip(), id_app)
+			self.CHATparticipantsIdList.append(chat_id.strip())
+			self.CHATaccountIdList.append(observable_chat_account)
+		
+		return observable_chat_account
+
 	def __checkGeoCoordinates(self, latitude, longitude, elevation, category):
 		latitude = latitude.strip()
 		longitude = longitude.strip()
 		
-		uuidLocation = ''
+		observable_location = None
 		if latitude != '' and longitude != '':
 			id_geo_loc = latitude + '@' + longitude
 			if id_geo_loc in self.LOCATION_lat_long_coordinate.keys():
-				uuidLocation = self.LOCATION_lat_long_coordinate[id_geo_loc]
+				observable_location = self.LOCATION_lat_long_coordinate[id_geo_loc]
 			else:
-				uuidLocation = self.__generateTraceLocationCoordinate(latitude, 
+				observable_location = self.__generateTraceLocationCoordinate(latitude, 
 					longitude, elevation, category)
-				self.LOCATION_lat_long_coordinate[id_geo_loc] = uuidLocation
+				self.LOCATION_lat_long_coordinate[id_geo_loc] = observable_location
 
-		return uuidLocation
+		return observable_location
 
 	def __checkSearchedItems(self, value):
 		
@@ -146,73 +190,51 @@ class AXIOMtoJSON:
 		return itemFound
 
 
-	def __generateTraceDeviceEvent(self, d_event_id, d_event_timeStamp, 
-		d_event_eventType, d_event_value):
+	def __generateTraceDeviceEvent(self, event_id, event_time_stamp, 
+		event_type, event_text):
 
-		d_event_timeStamp = self.__cleanDate(d_event_timeStamp)		
-		d_event_value = self.__cleanJSONtext(d_event_value)
+		event_time_stamp = self.__cleanDate(event_time_stamp)		
+		event_text = self.__cleanJSONtext(event_text)
 		
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id":uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:EventFacet",
-					"uco-observable:observableCreatedTime":{
-						"@type":"xsd:dateTime",
-						"@value":d_event_timeStamp
-					},
-					"uco-observable:eventType":d_event_eventType,
-					"uco-observable:eventText":d_event_value
-				}
-			]
-		}
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
+		observable = uco.observable.ObservableObject()
+		event_time_stamp = self.__convert_str_to_datetime(event_time_stamp)
 
-	def __generateTraceAppUsage(self, d_event_id, d_event_startTime, 
-		d_event_endTime, d_event_eventType, d_event_value):
+		facet_event = uco.observable.FacetEvent(event_type=event_type, 
+			event_text=event_text, created_time=event_time_stamp)
+		observable.append_facets(facet_event)
+
+		self.bundle.append_to_uco_object(observable)
+		return observable
+
+	def __generateTraceAppUsage(self, event_id, event_start_time, 
+		event_end_time, event_type, event_text):
 	
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id":uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:EventFacet",
-					"uco-observable:observableCreatedTime":{
-						"@type":"xsd:dateTime",
-						"@value":d_event_startTime
-					},
-					"uco-observable:observableStartTime":{
-						"@type":"xsd:dateTime",
-						"@value":d_event_startTime
-					},
-					"uco-observable:observableEndTime":{
-						"@type":"xsd:dateTime",
-						"@value":d_event_endTime
-					},
-					"uco-observable:eventType":d_event_eventType,
-					"uco-observable:eventText":d_event_value
-				}
-			]
-		}
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
+		event_start_time = self.__cleanDate(event_start_time)		
+		event_end_time = self.__cleanDate(event_end_time)		
+		event_text = self.__cleanJSONtext(event_text)
+		
+		observable = uco.observable.ObservableObject()
+		event_start_time = self.__convert_str_to_datetime(event_start_time)
+
+		event_end_time = self.__convert_str_to_datetime(event_end_time)
+
+#---	event_end_time is not included in the class FacetEvent 
+#		
+		facet_event = uco.observable.FacetEvent(event_type=event_type, 
+			event_text=event_text, created_time=event_start_time)
+		observable.append_facets(facet_event)
+
+		self.bundle.append_to_uco_object(observable)
+		return observable
 
 	def __checkEmailAddress(self, address):
 		if address in self.EMAILaddressUuid.keys():
-			uuid = self.EMAILaddressUuid.get(address)
+			observable_email_address = self.EMAILaddressUuid.get(address)
 		else:
-			uuid = self.__generateTraceEmailAccount(address)
-			self.EMAILaddressUuid[address] = uuid
+			observable_email_address = self.__generateTraceEmailAccount(address)
+			self.EMAILaddressUuid[address] = observable_email_address
 		
-		return  uuid
+		return  observable_email_address
 
 	def fillArrayWithEmpty(self, aInput, max):
 		if len(aInput) < max:
@@ -354,23 +376,23 @@ class AXIOMtoJSON:
 		imagePath, imageSize, imageMetadataHashSHA, imageMetadataHashMD5):
 
 		# generate Trace/Tool for the Acquisition and Extraction Actions
-		idTool = self.__generateTraceTool('AXIOM Process', 'Acquisition', 
+		object_tool = self.__generateTraceTool('AXIOM Process', 'Acquisition', 
 			'MAGNET', ufedVersion, []);
 		
 		# generate Trace/Identity for the Performer, D.F. Expert, of the Actions
-		idIdentity = self.__generateTraceIdentity(examinerName, '', '')
+		object_identity = self.__generateTraceIdentity(examinerName, '', '')
 		
 		# generate Trace/Role for the Performer, D.F. Expert, of the Actions
-		idRole = self.__generateTraceRole('Digital Forensic Expert')
+		object_role = self.__generateTraceRole('Digital Forensic Expert')
 		
 		# generate Trace/Relation between the above Role and the Identity traces
-		self.__generateTraceRelation(idIdentity, idRole, 'has_role', '', '', '', '');
+		self.__generateTraceRelation(object_identity, object_role, 'has_role', '', '', '', '');
 		
 		# generate Trace/Provenance_Record for the  device
-		idDeviceList = []
-		idDeviceList.append(self.DEVICEuuid)
-		idProvenanceDevice = self.__generateTraceProvencance(idDeviceList, 'Mobile device', 
-			'', deviceAcquisitionStartTime) 
+		observable_device_list = []
+		observable_device_list.append(self.observable_device)
+		object_provenance_device = self.__generateTraceProvencance(observable_device_list, 
+			'Mobile device', '', deviceAcquisitionStartTime) 
 		
 		# generate Trace/File for each file extracted by the Acuisition action
 		# idFileList contains the uuid of these files and it is used for
@@ -379,23 +401,23 @@ class AXIOMtoJSON:
 		idFilesAcquisition = []
 		for i, image_path in enumerate(imagePath):
 			if imageMetadataHashSHA[i].strip() == '':
-				idFileAcquisition = self.__generateTraceFile(image_path, 
+				object_file_acquisition = self.__generateTraceFile(image_path, 
 				imageSize[i], 'MD5', imageMetadataHashMD5[i], '', 
 				'', '', '', '', '', '', '', '', '', '', '', '')  				 				
 			else:
-				idFileAcquisition = self.__generateTraceFile(image_path, 
+				object_file_acquisition = self.__generateTraceFile(image_path, 
 				imageSize[i], 'SHA256', imageMetadataHashSHA[i], '', 
 				'', '', '', '', '', '', '', '', '', '', '', '') 				
 			
-			idFilesAcquisition.append(idFileAcquisition)  	
+			object_files_acquisition.append(object_file_acquisition)  	
 		
 
-		idProvenanceAcquisitionFiles = \
-			self.__generateTraceProvencance(idFilesAcquisition, 
+		object_provenance_acquisition_files = \
+			self.__generateTraceProvencance(object_files_acquisition, 
 				'Acquisition files', '', deviceAcquisitionStartTime)
 
 		idProvenanceAcquisitionFilesList = []
-		idProvenanceAcquisitionFilesList.append(idProvenanceAcquisitionFiles)
+		idProvenanceAcquisitionFilesList.append(object_provenance_acquisition_files)
 
 		idProvencanceAcquisitionAction = \
 		self.__generateTraceInvestigativeAction('acquisition', 
@@ -418,7 +440,7 @@ class AXIOMtoJSON:
 			'', idTool, '', idIdentity,
 			idProvenanceAcquisitionFiles, idProvenanceExtractionFilesList, '');
 
-	def __generateChainOfEvidence(self, source, location, uuidTrace, write_to_file=True):
+	def __generateChainOfEvidence(self, source, location, uuidTrace):
 		filePath = ''
 		charSeparator = '/'
 		separator = source.find(charSeparator)
@@ -450,71 +472,36 @@ class AXIOMtoJSON:
 		uuidFile = self.__generateTraceFileCoE(filePath, fileName, fileExt, fileSysType,
 			location)
 
-		self.FILEuuid[uuidTrace] = uuidFile
+		self.FILEuuid[uuidFile.get_id()] = uuidTrace
 		
-		if write_to_file:
-			self.__generateTraceRelation(uuidTrace, uuidFile, 'Contained_Within', 
-				location, '00001', '', '');
-			return ''
-		else:
-			relation_string = self.__generateStringRelation(uuidTrace, uuidFile, 'Contained_Within', 
-				location, '00001', '', '');
-			return relation_string
 
-	def __generateLastLine(self):
-		line = AXIOMtoJSON.TAB + '] \n }'
-		self.FileOut.write(line)
+		self.__generateTraceRelation(uuidTrace, uuidFile, 'Contained_Within', 
+				location, '00001', '', '');
+		return ''
 
-	def __generateTraceAppAccount(self, source, name, identifier, idApp, idIdentity):
+
+	def __generateTraceApplicationAccount(self, name, identifier, id_app):
 		
 		name = self.__cleanJSONtext(name)
 		identifier = self.__cleanJSONtext(identifier)
 
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject",
-			"uco-observable:hasChanged":true,
-			"uco-core:hasFacet":[ 
-				{
-					"@type":"uco-observable:AccountFacet", 
-					"uco-observable:accountIdentifier":identifier,
-					"uco-observable:isActive":true ,
-				}, 
-				{
-					"@type":"uco-observable:ApplicationAccountFacet", 
-					"uco-observable:application":
-						{"@id":idApp}
-			
-				},
-				{
-					"@type":"uco-observable:DigitalAccountFacet",
-					"uco-observable:displayName":name
-				}
-			]
-		}
+		observable = uco.observable.ObservableObject()
+
+		facet_account = uco.observable.FacetAccount(identifier)
+		facet_app_account = uco.observable.FacetApplicationAccount(application=id_app)		
+		facet_digital_account = uco.observable.FacetDigitalAccount(display_name=name)    	
 		
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
+		observable.append_facets(facet_account, facet_app_account, facet_digital_account)
+		
+		self.bundle.append_to_uco_object(observable)		
+		return observable
 	
-	def __generateTraceAppName(self, appName):
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[ 
-				{
-					"@type":"uco-observable:ApplicationFacet", 
-					"uco-core:name":appName
-				}
-			]
-		}
-				
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
+	def __generateTraceAppName(self, app_name):
+		observable = uco.observable.ObservableObject()
+		facet_application = uco.observable.FacetApplication(app_name=app_name)
+		observable.append_facets(facet_application)
+		self.bundle.append_to_uco_object(observable)
+		return observable
 
 	def __generateTraceAppIdentity(self, appName):
 		uuid = "kb:" + AXIOMtoJSON.__createUUID()
@@ -531,83 +518,24 @@ class AXIOMtoJSON:
 		
 		object_str = json.dumps(object_dict, indent = 4)
 		self.FileOut.write(object_str + ',\n')
-		return uuid
-		
+		return uuid		
 
-	def __generateTraceChatAccount(self, issuer, partyId, partyName, idApp):
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		
-		partyId = self.__cleanJSONtext(partyId)
-		partyName = self.__cleanJSONtext(partyName)
-
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:AccountFacet",
-					"uco-observable:accountIdentifier":partyId,
-					"uco-observable:isActive":True
-				},
-				{
-					"@type":"uco-observable:ApplicationAccountFacet",
-					"uco-observable:application":
-						{
-							"@id":idApp
-						}
-				},
-				{
-					"@type":"uco-observable:DigitalAccountFacet",
-					"uco-observable:displayName":partyName
-				}
-			]
-		}
-		
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
-
-	def __generateTraceChat(self, body, idApplication, timeStamp, idFrom,
-		idToList, status, outcome, direction, attachmentNames, 
+	def __generateTraceChat(self, body, id_app, time_stamp, phone_uuid_from,
+		phone_uuid_to, status, outcome, direction, message_type, attachmentNames, 
 		attachmentUrls):
-				
-		TOlist = '[{"@id":"' + idToList + '"}]'.replace('\t', ' ')
-		TOlist = json.loads(TOlist)
 
+		time_stamp = self.__convert_str_to_datetime(time_stamp)		
 		body = self.__cleanJSONtext(body)
-		timeStamp = self.__cleanDate(timeStamp)
-		
 
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:MessageFacet", 
-					"uco-observable:messageText":body,
-					"uco-observable:application":{
-						"@id":idApplication
-					},
-					"uco-observable:sentTime":{
-						"@type":"xsd:dateTime",
-						"@value":timeStamp
-					},
-					"uco-observable:from":{
-						"@id":idFrom
-					},
-					"uco-observable:to":TOlist,
-					"uco-observable:allocationStatus":status,
-					"uco-observable:messageType":"CHAT Message"
-				}			
-			]
-		}
-
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
+		observable_msg = uco.observable.ObservableObject()
+		facet_message = uco.observable.FacetMessage(msg_to=phone_uuid_to, 
+			msg_from=phone_uuid_from, message_text=body, sent_time=time_stamp,
+	                 application=id_app, message_type=message_type)
+		observable_msg.append_facets(facet_message)
 		
+		self.bundle.append_to_uco_object(observable_msg)
+						
+	
 #---	each Message, within a specific Chat can have more than one attachment,
 # 		both the Filenames and the Urls of the Attachment are separated by
 # 		a triple hash tag # 
@@ -629,104 +557,64 @@ class AXIOMtoJSON:
 			 	(listFileUrls[i].strip() != ''):
 #---	listFileUrls[i] will be stored in the property path of the FILE trace
 #			 	
-				fileUuid = self.__generateTraceFile(list_file_name, 
+				observable_file = self.__generateTraceFile(list_file_name, 
 				'', '', '', '', '', '', '', listFileUrls[i],
 				'', '', '', '', '', '', '', '')
 				
-				self.__generateTraceRelation(fileUuid, uuid, 'Attached_To', 
+				self.__generateTraceRelation(observable_file, observable_msg, 'Attached_To', 
 				'', '', '', '')
-		return uuid
+		return observable_msg
 
 	
 	def __generateTraceDeviceDisk(self, size, partitions_ref):
-
-		partitions = '['
-		for i, partition in enumerate(partitions_ref):
-			partitions += '{"@id":"' + partition + '"},'
-
-		partitions = json.loads(partitions[0:-1] + ']')
-
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject",
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:DiskFacet",
-					"uco-observable:diskType": "Fixed",
-					"uco-observable:diskSize":size,
-					"uco-observable:partition":partitions
-				}
-			]
-		}
-
-
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
-
-	def __generateTraceDiskPartition(self, volume, partition_type, partition_space, 
-		partition_space_left, partition_space_used, partition_offset):
 		
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject",
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:DiskPartitionFacet",
-					"uco-observable:serialNumber":volume,
-					"uco-observable:diskPartitionType":partition_type,
-					"uco-observable:totalSpace":partition_space,
-					"uco-observable:spaceLeft":partition_space_left,
-					"uco-observable:spaceUsed":partition_space_used,
-					"uco-observable:partitionOffset":partition_offset
-				}
-			]
-		}
+		observable = uco.observable.ObservableObject()
+		size=int(size)
+		facet_disk = uco.observable.FacetDisk(disk_type="Fixed", size=size, 
+			partition=partitions_ref)
+		
+		observable.append_facets(facet_disk)
 
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
+		self.bundle.append_to_uco_object(observable)
+		return observable
+
+	def __generateTraceDiskPartition(self, serial_number, type, total_space, space_left, 
+		space_used, offset):
+		
+		observable = uco.observable.ObservableObject()
+		total_space=int(total_space)
+		space_left=int(space_left)
+		space_used=int(space_used)
+		offset=int(offset)
+		facet_disk_partition = uco.observable.FacetDiskPartition(serial_number=serial_number, 
+			partition_type=type, total_space=total_space, space_left=space_left, space_used=space_used, 
+			offset=offset)   
+
+		observable.append_facets(facet_disk_partition)
+
+		self.bundle.append_to_uco_object(observable)
+		return observable
 
 	def __generateTraceDeviceMobile(self, deviceId, deviceIMSI, deviceBluetoothAddress, 
 		deviceBluetoothName, deviceIMEI, deviceSN, deviceName, 
 		deviceModel, deviceICCID, deviceOSVersion):
 
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject",
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:DeviceFacet",
-					"uco-observable:model":deviceModel,
-					"uco-observable:serialNumber":deviceSN,
-				},
-				{
-					"@type":"uco-observable:MobileDeviceFacet",
-					"uco-observable:IMSI":deviceIMSI,
-					"uco-observable:ICCID":deviceICCID,
-					"uco-observable:IMEI":deviceIMEI,
-				},
-				{
-					"@type":"uco-observable:OperatingSystemFacet",
-					"uco-observable:version":deviceOSVersion,
-				},
-				{
-					"@type":"uco-observable:BluetoothAddressFacet",
-					"uco-core:name":deviceBluetoothName,
-					"uco-observable:addressValue":deviceBluetoothAddress,
-				}
-			]
-		}
+		observable = uco.observable.ObservableObject()
+		facet_device = uco.observable.FacetDevice(device_type="Mobile phone",
+			model=deviceModel, serial=deviceSN)	
+		facet_mobile = uco.observable.FacetMobileDevice(IMSI=deviceIMSI, ICCID=deviceICCID,
+			IMEI=deviceIMEI)
+		facet_operating_system = uco.observable.FacetOperatingSystem(
+			os_version=deviceOSVersion)
+		facet_bluetooth = uco.observable.BluetoothAddress(name=deviceBluetoothName,
+			address=deviceBluetoothAddress)
 
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
+		observable.append_facets(facet_device, facet_mobile, facet_operating_system, 
+    		facet_bluetooth)
+    	
+		self.bundle.append_to_uco_object(observable)		
+		
+		return observable
 
 	
 	def __generateTraceEmail(self, EMAILid, EMAILstatus, EMAILsource, EMAILlocation,
@@ -739,39 +627,32 @@ class AXIOMtoJSON:
 			idFROM = self.__checkEmailAddress(address_from.group().strip())
 		else:
 			idFROM = self.__checkEmailAddress(EMAILidentifierFROM.strip())
-				
+		
 		itemsTO = ''		
 		EMAILtoList = re.findall(self.EMAILregex, EMAILidentifiersTO)
 		email_distinct = set(EMAILtoList)
+		itemsTO = []
 		for item in email_distinct:			
 			if item.strip() != '':				
-				uuidEmail = self.__checkEmailAddress(item.strip().lower())
-				idTO = '{"@id":"' + uuidEmail + '"}'
-				itemsTO += idTO + ','
+				observable_to_address = self.__checkEmailAddress(item.strip().lower())				
+				itemsTO.append(observable_to_address)
 		
-		itemsTO = json.loads('[' + itemsTO[0:-1] + ']')
-
-		itemsCC = ''
+		itemsCC = []
 		EMAILtoList = re.findall(self.EMAILregex, EMAILidentifiersCC)
 		email_distinct = set(EMAILtoList)
 		for item in email_distinct:
 			if item.strip() != '':
-				uuidEmail = self.__checkEmailAddress(item.strip().lower())
-				idCC = '{"@id":"' + uuidEmail + '"}'
-				itemsCC += idCC + ','
-
-		itemsCC = json.loads('[' + itemsCC[0:-1] + ']')
+				observable_cc_address = self.__checkEmailAddress(item.strip().lower())
+				itemsCC.append(observable_cc_address)
 		
-		itemsBCC = ''
+		itemsBCC = []
 		EMAILtoList = re.findall(self.EMAILregex, EMAILidentifiersBCC)
 		email_distinct = set(EMAILtoList)
 		for item in email_distinct:
 			if item.strip() != '':
-				uuidEmail = self.__checkEmailAddress(item.strip().lower())
-				idBCC = '{"@id":"' + uuidEmail + '"}'
-				itemsBCC += idBCC + ','
+				observable_bcc_address = self.__checkEmailAddress(item.strip().lower())
+				itemsBCC.append(observable_bcc_address)
 
-		itemsBCC = json.loads('[' + itemsBCC[0:-1] + ']')
 
 		body = self.__cleanJSONtext(EMAILbody)
 		subject = self.__cleanJSONtext(EMAILsubject)
@@ -782,254 +663,118 @@ class AXIOMtoJSON:
 #---	the xsd:dateTime has the structure YYYY-MM-DDTHH:MM:SS (UTCxxx
 #			the character "/" is not allowed
 #		
-		EMAILtimeStamp = self.__cleanDate(EMAILtimeStamp)	
-
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:EmailMessageFacet",
-					"uco-observable:sentTime":{
-						"@type":"xsd:dateTime",
-						"@value":EMAILtimeStamp
-					},
-					"uco-observable:isMimeEncoded":False,
-					"uco-observable:isMultipart":False,
-					"uco-observable:from":{
-						"@id":idFROM
-					},
-					"uco-observable:to":itemsTO,
-					"uco-observable:cc":itemsCC,
-					"uco-observable:bcc":itemsBCC,
-					"uco-observable:body":body,
-					"uco-observable:subject":subject,
-					"uco-observable:allocationStatus":EMAILstatus
-				}
-			]
-		}
+		EMAILtimeStamp = self.__cleanDate(EMAILtimeStamp)
+		EMAILtimeStamp = self.__convert_str_to_datetime(EMAILtimeStamp)
 		
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
+		observable_email = uco.observable.ObservableObject()		
+		facet_email_message = uco.observable.FacetEmailMessage(msg_to=itemsTO, 
+			msg_from=idFROM, cc=itemsCC, bcc=itemsBCC, subject=subject, body=body, 
+            sent_time=EMAILtimeStamp, allocation_status=EMAILstatus)
 
-		self.__generateChainOfEvidence(EMAILsource, EMAILlocation, uuid)		
+
+		observable_email.append_facets(facet_email_message)
+		self.bundle.append_to_uco_object(observable_email)
+
+		self.__generateChainOfEvidence(EMAILsource, EMAILlocation, observable_email)		
 
 		email_attachment_list = EMAILattachmentsFilename.split(',')
 		for i, email_file in enumerate(email_attachment_list):
 			if email_file.strip() != '':
-				fileUuid = self.__generateTraceFile(email_file, 
+				observable_file = self.__generateTraceFile(email_file, 
 				'', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '')
-				self.__generateTraceRelation(fileUuid, uuid, 'Attached_To', 
-				'', '', '', '')
+				self.__generateTraceRelation(observable_file, observable_email, 
+					'Attached_To', '', '', '', '')
 		
-		return uuid
+		return observable_email
 
 	def __generateTraceEmailAccount(self, address):
-		
-		uuidAddress = self.__generateTraceEmailAddress(address)
 
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,\
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:AccountFacet",
-					"uco-observable:isActive":True,
-					"uco-observable:accountIdentifier":""
-				},
-				{
-				"@type":"uco-observable:EmailAccountFacet",
-				"uco-observable:emailAddress":
-					{"@id":uuidAddress }
-				}
-			]
-		}
+		observable_email_address = self.__generateTraceEmailAddress(address)
+		observable_email_account = uco.observable.ObservableObject()
+		facet_email_account = uco.observable.FacetEmailAccount(observable_email_address)
+		facet_account = uco.observable.FacetAccount("")
+		observable_email_account.append_facets(facet_account, facet_email_account)
 		
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
+		self.bundle.append_to_uco_object(observable_email_account)
+		
+		return observable_email_account
+
 
 	def __generateTraceEmailAddress(self, address):
 		
 		address = self.__cleanJSONtext(address)
-
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:EmailAddressFacet", 
-					"uco-observable:addressValue":address
-				}
-			]
-		}
+		observable = uco.observable.ObservableObject()
+		facet_email_address = uco.observable.FacetEmailAddress(email_address_value=address)
+		observable.append_facets(facet_email_address)
 		
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
-
+		self.bundle.append_to_uco_object(observable)
+		return observable
 
 	def __generateTraceFile(self, FILEpath, FILEsize, FILEhashType, 
 		FILEHashValue, FILETag, FILEtimeC, FILEtimeM, FILEtimeA, FILElocalPath, 
 		FILEextension, FILEexifMake, FILEexifModel, FILEexifLatitudeRef, FILEexifLatitude, 
 		FILEexifLongitudeRef, FILEexifLongitude, FILEexifAltitude):
 		
+		observable_file = uco.observable.ObservableObject()
 		head, tail = os.path.split(FILEpath)
-		tail = tail.replace("\\", "/")
-		tail = tail.replace('"', "'")
+		tail = self.__cleanJSONtext(tail)
+
 		path = FILEpath.replace('\\', '/')
 		path = path.replace('"', "'")
+
 		dotPos = tail.find('.')
 		sExt = ''
 		if dotPos > -1:
 			sExt = tail[dotPos:]
 		
-		if FILEHashValue.upper() == 'N/A':
-			FILEHashValue = '0';
 
 		if FILEhashType.upper() == '_NOT_PROVIDED_':
-			FILEhashType = 'MD5';
+			FILEhashType = 'MD5'		
 
+		if  FILEsize.strip != '0' and FILEHashValue.upper() != "N/A":	
+			facet_content = uco.observable.FacetContentData(hash_method=FILEhashType, 
+				hash_value=FILEHashValue)
+			observable_file.append_facets(facet_content)
 
 		if FILEsize.strip() == '':
-			FILEsize = '0'
-
-		sizeFile = ''
-		if FILEsize.strip() != '0':
-			sizeFile = '{' +\
-				'"@type":"uco-observable:ContentDataFacet",' +\
-				'"uco-observable:hash":[' +\
-				'{' +\
-				'"@type":"uco-types:Hash",' +\
-				'"uco-types:hashMethod":' +\
-				'{' +\
-				'"@type":"uco-vocabulary:HashNameVocab",' +\
-				'"@value":"' + FILEhashType + '"' +\
-				'},' +\
-				'"uco-types:hashValue":' +\
-				'{' +\
-				'"@type":"xsd:hexBinary",' +\
-				'"@value":"' + FILEHashValue  + '"' +\
-				'}' +\
-				'}' +\
-				'] ' +\
-				'}'
-			
-		if sizeFile != '':
-			sizeFile = json.loads(sizeFile)
+			FILEsize = int(AXIOMtoJSON.INT)
+		else:
+			FILEsize = int(FILEsize)
 
 		localPath = FILEpath.replace('"', "").replace('\n', '').replace('\r', '')
 		localPath = localPath.replace("\\", "/")
 		
 		FILEtimeC = self.__cleanDate(FILEtimeC)
+		FILEtimeC = self.__convert_str_to_datetime(FILEtimeC)
 		FILEtimeM = self.__cleanDate(FILEtimeM)
-		FILEtimeA = self.__cleanDate(FILEtimeA)			
+		FILEtimeM = self.__convert_str_to_datetime(FILEtimeM)
+		FILEtimeA = self.__cleanDate(FILEtimeA)
+		FILEtimeA = self.__convert_str_to_datetime(FILEtimeA)
 		
-		line_exif = ''
-		if FILEexifLatitude.strip() != '':
+		
+		if FILEexifLatitude.strip() != '':	
 			FILEexifLatitude = FILEexifLatitude.strip('" ')			
 			FILEexifLongitude = FILEexifLongitude.strip('" ')
 			FILEexifLatitude = FILEexifLatitude.replace('°', ', ').replace("'", ', ')
 			FILEexifLongitude = FILEexifLongitude.replace('°', ', ').replace("'", ', ')
 			FILEexifAltitude = FILEexifAltitude.strip('" ')
-			line_exif = '{' +\
-				'"@type":"uco-observable:EXIFFacet",' +\
-				'"uco-observable:exifData": {' +\
-				'"@type":"uco-types:ControlledDictionary",' +\
-				'"uco-types:entry": [' +\
-				'{' +\
-				'"@type":"uco-types:ControlledDictionaryEntry",' +\
-				'"uco-types:key":"Make",' +\
-				'"uco-types:value":"' + FILEexifMake + '"' +\
-				'},' +\
-				'{' +\
-				'"@type":"uco-types:ControlledDictionaryEntry",' +\
-				'"uco-types:key":"Model",' +\
-				'"uco-types:value":"' + FILEexifModel + '"' +\
-				'},' +\
-				'{' +\
-				'"@type":"uco-types:ControlledDictionaryEntry",' +\
-				'"uco-types:key":"LatitudeRef",' +\
-				'"uco-types:value":"' + FILEexifLatitudeRef + '"' +\
-				'},' +\
-				'{' +\
-				'"@type":"uco-types:ControlledDictionaryEntry",' +\
-				'"uco-types:key":"Latitude",' +\
-				'"uco-types:value":"' + FILEexifLatitude + '"' +\
-				'},' +\
-				'{' +\
-				'"@type":"uco-types:ControlledDictionaryEntry",' +\
-				'"uco-types:key":"LongitudeRef",' +\
-				'"uco-types:value":"' + FILEexifLongitudeRef + '"' +\
-				'},' +\
-				'{' +\
-				'"@type":"uco-types:ControlledDictionaryEntry",' +\
-				'"uco-types:key":"Longitude",' +\
-				'"uco-types:value":"' + FILEexifLongitude + '"' +\
-				'},' +\
-				'{' +\
-				'"@type":"uco-types:ControlledDictionaryEntry",' +\
-				'"uco-types:key":"Altitude",' +\
-				'"uco-types:value":"' + FILEexifAltitude + '"' +\
-				'}' +\
-				']' +\
-				'}' +\
-				'}'
+			exif_data = {"Make":FILEexifMake, 
+				"Model":FILEexifModel, "LatitudeRef":FILEexifLatitudeRef,
+				"Latitude":FILEexifLatitude, "LongitudeRef":FILEexifLongitudeRef,
+				"Longitude":FILEexifLongitude, "Altitude":FILEexifAltitude}		
+			facet_exif = uco.observable.FacetEXIF(**exif_data)
+			observable_file.append_facets(facet_exif)
 
-		if line_exif != '':
-			line_exif = json.loads(line_exif)
 
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject",
-			"uco-observable:hasChanged":True,
-			"uco-core:tag":[
-				FILETag
+		facet_file = uco.observable.FacetFile(tag=[FILETag], file_name=tail, 
+			file_path=path, file_local_path=localPath, file_extension=sExt,
+                 size_bytes=FILEsize, accessed_time=FILEtimeA, created_time=FILEtimeC, 
+                 modified_time=FILEtimeM)
+		observable_file.append_facets(facet_file) 
 
-			],
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:FileFacet",
-					"uco-observable:fileName":tail,
-					"uco-observable:filePath":path,
-					"uco-observable:fileLocalPath":localPath,
-					"uco-observable:extension":sExt,
-					"uco-observable:fileSystemType":"userdata (ExtX)",
-					"uco-observable:isDirectory":False,
-					"uco-observable:sizeInBytes": {
-						"@type":"xsd:integer",
-						"@value":FILEsize,
-					},
-					"uco-core:objectCreatedTime":{
-						"@type":"xsd:dateTime",
-						"@value":FILEtimeC
-					},
-					"uco-core:objectModifiedTime":{
-						"@type":"xsd:dateTime",
-						"@value":FILEtimeM
-					},
-					"uco-core:objectAccessedTime":{
-						"@type":"xsd:dateTime",
-						"@value":FILEtimeA
-					}
-				},
-				sizeFile , 
-				line_exif, \
-			]
-		}
-		
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		
-		return uuid
+		self.bundle.append_to_uco_object(observable_file)
+
+		return observable_file
 
 #---	FileFacet for the Chain of Evidence
 #		the data are FileName, FilePath, FileExt, FileSystemType
@@ -1039,29 +784,16 @@ class AXIOMtoJSON:
 		
 		FILEsysType = self.__cleanJSONtext(FILEsysType)
 
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()		
+		observable_file = uco.observable.ObservableObject()
 
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:tag":["Binary"],
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:FileFacet",
-					"uco-observable:fileName":FILEname,
-					"uco-observable:filePath":FILEpath,
-					"uco-observable:extension":FILEext,
-					"uco-observable:fileSystemType":FILEsysType,
-					"uco-observable:isDirectory":False,
-					"uco-observable:comment":FILElocation
-				}
-			]
-		}
-		
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
+		facet_file = uco.observable.FacetFile(tag=["Binary"], file_name=FILEname, 
+			file_path=FILEpath, file_extension=FILEext)
+		observable_file.append_facets(facet_file) 
+
+		self.bundle.append_to_uco_object(observable_file)
+
+		return observable_file
+
 
 	def __generateTraceIdentity(self, name, familyName, birthDate):
 		
@@ -1094,10 +826,10 @@ class AXIOMtoJSON:
 	def __generateTraceLocationDevice(self, loc_id, loc_longitude, loc_latitude, 
 		loc_category):
 		
-		uuidLocation = self.__checkGeoCoordinates(loc_latitude, loc_longitude,
+		observable_location = self.__checkGeoCoordinates(loc_latitude, loc_longitude,
 			'', loc_category)
 
-		return uuidLocation
+		return observable_location
 
 	def writePhoneAccountFromContacts(self, CONTACTname, CONTACTphoneNums):
 		for i, contact_name in enumerate(CONTACTname):
@@ -1106,39 +838,27 @@ class AXIOMtoJSON:
 				self.phoneNumberList.append(CONTACTphoneNums[i])
 				self.phoneNameList.append(contact_name)
 				mobileOperator = ""
-				uuid = self.generateTracePhoneAccount(mobileOperator, contact_name, 
+				observable_phone = self.generateTracePhoneAccount(mobileOperator, contact_name, 
 					CONTACTphoneNums[i])
-				self.phoneUuidList.append(uuid)
+				self.phoneUuidList.append(observable_phone)		
 
-	def generateTracePhoneAccount(self, source, name, phoneNum):
-		
+	def generateTracePhoneAccount(self, source, name, phone_num):
+
 		name = self.__cleanJSONtext(name)
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[ 
-				{
-					"@type":"uco-observable:AccountFacet", 
-					"uco-observable:accountIssuer":source,
-					"uco-observable:isActive":True,
-					"uco-observable:accountIdentifier":""
-				}, 
-				{
-					"@type":"uco-observable:PhoneAccountFacet",
-					"uco-observable:phoneNumber":phoneNum,
-					"uco-core:name":name
-				}
-			]
-		}
+		
+		observable = uco.observable.ObservableObject()
+		facet_phone_account = uco.observable.FacetPhoneAccount(phone_number=phone_num, 
+			account_name=name)
+		facet_account = uco.observable.FacetAccount("", is_active=True, 
+			issuer_id=source)
+		observable.append_facets(facet_account, facet_phone_account)
+
+		self.bundle.append_to_uco_object(observable)
+		return observable
 				
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
 
 	def __generateTraceSearchedItem(self, search_id, search_value, search_timestamp, 
-		search_source):
+		search_app):
 
 		search_value = self.__cleanJSONtext(search_value)
 		if search_value.strip() == '':
@@ -1147,29 +867,21 @@ class AXIOMtoJSON:
 		search_timestamp = self.__cleanDate(search_timestamp)		
 
 		if not self.__checkSearchedItems(search_value + search_timestamp):
-			return ''
+			return None
 
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[
-				{
-					"@type":"draft:SearchedItemFacet", 
-					"draft:searchSource":search_source,
-					"draft:searchLaunchedTime":{ 
-						"@type":"xsd:dateTime",
-						"@value":search_timestamp
-					},
-					"draft:searchValue":search_value
-				}
-			]
-		}
+		observable_app = self.__checkAppName(search_app)
 
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
+		observable = uco.observable.ObservableObject()
+		
+		search_timestamp = self.__convert_str_to_datetime(search_timestamp)
+
+		facet_searched_item = not_in_ontology.entities.FacetSearchedItem(
+		search_value=search_value, application=observable_app, 
+		search_launch_time=search_timestamp)
+		observable.append_facets(facet_searched_item)
+		
+		self.bundle.append_to_uco_object(observable)
+		return observable
 
 	def __generateTraceInvestigativeAction(self, name, description, startTime, endTime, 
 		idInstrument, location, idPerformer, idObject, listResult, endChar):
@@ -1229,7 +941,7 @@ class AXIOMtoJSON:
 		self.FileOut.write(object_str + ',\n')
 		return uuid
 
-	def __generateTracePhoneCall(self, direction, startTime, idFROM, idTO, 
+	def __generateTracePhoneCall(self, direction, start_time, idFROM, idTO, 
 								duration, status, outcome):
 		nTime = 0
 		if duration != '':
@@ -1245,86 +957,38 @@ class AXIOMtoJSON:
 		if duration == "":
 			duration = "0"
 
-		if "Native" in self.appNameList: 
-			idx = self.appNameList.index("Native")
-			idAppName = self.appNameList[idx]
-			idAppIdentity = self.appIDList[idx]
-		else:
-			idAppIdentity = self.__generateTraceAppName("Native")
-			self.appNameList.append("Native")
-			self.appIDList.append(idAppIdentity)
-		
-		startTime = self.__cleanDate(startTime)
-		
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[ 
-				{ 
-					"@type":"uco-observable:PhoneCallFacet", 
-					"uco-observable:callType":direction,
-					"uco-observable:startTime":{
-						"@type":"xsd:dateTime",
-						"@value":startTime
-					},
-					"uco-observable:application":{ 
-						"@id":idAppIdentity
-					},
-					"uco-observable:from":{
-						"@id":idFROM
-					},
-					"uco-observable:to":{
-						"@id":idTO
-					},
-					"uco-observable:duration":{
-						"@type":"xsd:long",
-						"@value":duration
-					},
-					"uco-observable:allocationStatus":status
-				}
-			]
-		}
-		
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-
-		return uuid
+		duration = int(duration)
+		start_time = self.__cleanDate(start_time)
+		start_time = self.__convert_str_to_datetime(start_time)
+		observable_app = self.__checkAppName("Native")
 	
+		observable = uco.observable.ObservableObject()
+		
+		facet_phone_call = uco.observable.FacetPhoneCall(call_type=direction,
+			start_time=start_time, application=observable_app, call_from=idFROM, 
+			call_to=idTO, call_duration=duration, allocation_status=status)		
+		observable.append_facets(facet_phone_call)
 
-	def __generateTracePhoneOwner(self, Source, Name, PhoneNum):
+		self.bundle.append_to_uco_object(observable)
+		return observable
+	
+	def __generateTracePhoneOwner(self, source, name, phone_num):
+		observable = uco.observable.ObservableObject()
+		facet_account = uco.observable.FacetAccount("_")
+		name += ' (Owner)'
+		facet_phone_account = uco.observable.FacetPhoneAccount(phone_number=phone_num,
+			account_name=name)
+
+		observable.append_facets(facet_account, facet_phone_account)
+		self.bundle.append_to_uco_object(observable)
 		
-		self.phoneOwnerUuid = "kb:" + AXIOMtoJSON.__createUUID()
-		
-		object_dict = {
-			"@id": self.phoneOwnerUuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[ 
-				{
-					"@type":"uco-observable:AccountFacet", 
-					"uco-observable:isActive":True,
-					"uco-observable:accountIdentifier":" "
-				}, 
-				{
-					"@type":"uco-observable:PhoneAccountFacet", 
-					"uco-observable:phoneNumber":PhoneNum,
-					"uco-core:name":Name,
-					"uco-observable:accountIssuer":Source
-				}
-			]
-		}
-		
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		
-		self.phoneNumberList.append(PhoneNum)
-		self.phoneUuidList.append(self.phoneOwnerUuid)
+		self.object_phone_owner = observable
+		self.phoneNumberList.append(phone_num)
+		self.phoneUuidList.append(self.object_phone_owner)		
+		return observable
 
 	def __generateTraceProvencance(self, idTracesList, description, 
 		exhibitNumber, creationTime):
-		
 		n = len(idTracesList)
 		lineTraces = '['		
 		for idx in range(n - 1):
@@ -1412,123 +1076,52 @@ class AXIOMtoJSON:
 		start_date = self.__cleanDate(start_date)
 		end_date = self.__cleanDate(end_date)
 
-		lineTable = ''
-		if not table == '':
-			cleanOffset = offset.replace('@', '')
-			lineTable = '{' + \
-				'"@type":"uco-observable:DataRangeFacet",' + \
-				'"uco-observable:rangeOffset": {' + \
-					'"@type":"xsd:integer", ' +\
-					'"@value":"' + cleanOffset + '"' +\
-				'},' +\
-				'"uco-observable:rangeSize": {' + \
-					'"@type":"xsd:integer", ' + \
-					'"@value":"0"' + \
-				'}' + \
-			'}'
+		#lineTable = ''
+		# if not table == '':
+		# 	cleanOffset = offset.replace('@', '')
+		# 	lineTable = '{' + \
+		# 		'"@type":"uco-observable:DataRangeFacet",' + \
+		# 		'"uco-observable:rangeOffset": {' + \
+		# 			'"@type":"xsd:integer", ' +\
+		# 			'"@value":"' + cleanOffset + '"' +\
+		# 		'},' +\
+		# 		'"uco-observable:rangeSize": {' + \
+		# 			'"@type":"xsd:integer", ' + \
+		# 			'"@value":"0"' + \
+		# 		'}' + \
+		# 	'}'
 						
-		if lineTable != '':
-			lineTable = json.loads(lineTable)
+		start_date = self.__convert_str_to_datetime(start_date)
+		end_date = self.__convert_str_to_datetime(end_date)
+		observable_relationship = uco.observable.ObservableRelationship(source, target, 
+			start_time=start_date, end_time=end_date, kind_of_relationship=relation, 
+			directional=True)
 
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableRelationship",
-			"uco-observable:startTime":
-				{
-					"@type":"xsd:dateTime",
-					"@value":start_date
-				},
-			"uco-observable:endTime":
-				{
-					"@type":"xsd:dateTime",
-					"@value":end_date
-				},
-			"uco-core:source":
-				{
-					"@id":source
-				},
-			"uco-core:target":
-				{
-					"@id":target
-				},
-			"uco-core:kindOfRelationship":relation,
-			"uco-core:isDirectional":True,
-			"uco-core:facets": [
-				lineTable
-			]	
-		}
-		object_str = json.dumps(object_dict, indent = 4)
-		
-		self.FileOut.write(object_str + ',\n')
+		self.bundle.append_to_uco_object(observable_relationship)
+
+		return observable_relationship
 
 	def __generateTraceRole(self, role):
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-role:Role", 
-			"uco-role:name":role
-		}
+		observable = uco.observable.ObservableObject()
 
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		
-		return uuid
+   
+		facet_role = uco.role.Role(name=role)
+		observable.append_facets(facet_role)
+
+		self.bundle.append_to_uco_object(observable)
+		return observable
 
 
 	def __generateThreadMessages(self, chatTraceId, chatThread, chatIdAccountList):
 		
-		nChatThread = len(chatThread)
-		lineThread  = '['
-		for i in range(nChatThread):
-			lineThread += '{'
-			lineThread += '"olo:index":"' + str(i + 1) + '",'
-			lineThread += '"olo:item": {'
-			lineThread += '"@id":"' + chatThread[i] + '"'
-			lineThread += '}'
-			lineThread += '},'
-
-		lineThread = json.loads(lineThread[0:-1] + ']')
-
-		nChatAccounts = len(chatIdAccountList)
-		lineChatAccounts = '['		
-		for i in range(nChatAccounts - 1):
-			lineChatAccounts += '{"@id":"' + chatIdAccountList[i] + '"},'
-
-		if nChatAccounts > 0:
-			lineChatAccounts += '{"@id":"' + chatIdAccountList[nChatAccounts - 1] + '"}]\n' 
-		else:
-			lineChatAccounts += ']'
-
-		lineChatAccounts = json.loads(lineChatAccounts)
-		str_chatThread = str(len(chatThread))
-		str_nChatThread = str(nChatThread)
-
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:MessageThreadFacet",
-					"uco-observable:displayName":"",
-					"uco-observable:message":{
-						"olo:length":str_chatThread,
-						"olo:slot":lineThread
-					},
-					"uco-observable:participants":lineChatAccounts
-				}
-			]
-		}
-		
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-
-		return uuid
+		observable = uco.observable.ObservableObject()
+		facet_message_thread = uco.observable.FacetMessagethread(messages=chatThread, 
+			participants=chatIdAccountList)		
+		observable.append_facets(facet_message_thread)
+		self.bundle.append_to_uco_object(observable)
+		return observable
 
 	def __generateTraceTool(self, name, type, vendor, version, confList):
-		
 		
 		line = '['
 		if len(confList) > 0:  
@@ -1580,30 +1173,17 @@ class AXIOMtoJSON:
 		
 		URL_Value = self.__cleanJSONtext(URL_Value)
 		
-		URL_Value = URL_Value.strip()
-
 		if  URL_Value in self.UrlList.keys(): 
-			uuid = self.UrlList.get(URL_Value)
+			observable_url = self.UrlList.get(URL_Value)
 		else:
-			uuid = "kb:" + AXIOMtoJSON.__createUUID()	
-			self.UrlList[URL_Value] = uuid						
+			observable_url = uco.observable.ObservableObject()
+			facet_url = uco.observable.FacetUrl(url_address=URL_Value)
 		
-			object_dict = {
-				"@id": uuid,
-				"@type":"uco-observable:ObservableObject", 
-				"uco-observable:hasChanged":True,
-				"uco-core:hasFacet":[
-					{
-						"@type":"uco-observable:URLFacet", 
-						"uco-observable:fullValue":URL_Value
-					}
-				]
-			}
+			observable_url.append_facets(facet_url)
+			self.bundle.append_to_uco_object(observable_url)
+			
+		return observable_url
 
-			object_str = json.dumps(object_dict, indent = 4)
-			self.FileOut.write(object_str + ',\n')
-
-		return uuid
 
 	def __generateTraceWebPages(self, WEB_PAGEid, WEB_PAGEsource, WEB_PAGEurl, 
 				WEB_PAGEtitle, WEB_PAGEvisitCount,  WEB_PAGElastVisited,
@@ -1614,254 +1194,154 @@ class AXIOMtoJSON:
 
 			WEB_PAGElastVisited = self.__cleanDate(WEB_PAGElastVisited)
 
-			if WEB_PAGEsource.strip() in self.appNameList: 
-				idx = self.appNameList.index(WEB_PAGEsource.strip())
-				idAppName = self.appNameList[idx]
-				idAppIdentity = self.appIDList[idx]
-			else:
-				idAppIdentity = self.__generateTraceAppName(WEB_PAGEsource.strip())
-				self.appNameList.append(WEB_PAGEsource.strip())
-				self.appIDList.append(idAppIdentity)
+			observable_app = self.__checkAppName(WEB_PAGEsource.strip())
 
-			uuidUrl = self.__generateTraceURL(WEB_PAGEurl)
-			title = WEB_PAGEtitle.replace('"', '')
+			observable_url = self.__generateTraceURL(WEB_PAGEurl)			
+			title = self.__cleanJSONtext(WEB_PAGEtitle)
+
+			if WEB_PAGEvisitCount.strip() == '':
+				visit_count = '0' 
+			else:
+				visit_count = WEB_PAGEvisitCount			
+
+			visit_count = int(visit_count)
+
+			observable = uco.observable.ObservableObject()
+			WEB_PAGElastVisited = self.__convert_str_to_datetime(WEB_PAGElastVisited)
+			facet_url_history_entry = uco.observable.UrlHistoryEntry(
+				last_visit=WEB_PAGElastVisited, manually_entered_count=0, 
+				url=observable_url, page_title=title, visit_count=visit_count, 
+				allocation_status=WEBrecoveryMethod)			
+			facet_url_history = uco.observable.FacetUrlHistory(observable_app)
+			observable.append_facets(facet_url_history, facet_url_history_entry)
 			
-			visit_count = WEB_PAGEvisitCount.strip()
-			if visit_count == '':
-				visit_count= '0' 
+			self.bundle.append_to_uco_object(observable)
 			
-			uuid = "kb:" + AXIOMtoJSON.__createUUID()
-			object_dict = {
-				"@id": uuid,
-				"@type":"uco-observable:ObservableObject", 
-				"uco-observable:hasChanged":True,
-				"uco-core:hasFacet":[
-					{
-						"@type":"uco-observable:URLHistoryFacet", 
-						"uco-observable:browserInformation":{
-							"@id":idAppIdentity
-						},
-						"uco-observable:urlHistoryEntry": [
-							{
-								#"@type":"uco-observable:URLHistoryEntry",
-								"uco-observable:firstVisit":{
-									"@type":"xsd:dateTime",
-									"@value":"1900-01-01T08:00:00"
-								},
-								"uco-observable:lastVisit":{
-									"@type":"xsd:dateTime",
-									"@value":WEB_PAGElastVisited
-								},
-								"uco-observable:expirationTime":{
-									"@type":"xsd:dateTime",\
-									"@value":"1900-01-01T08:00:00"
-								},
-								"uco-observable:userProfile":"",			
-								"uco-observable:url":{
-									"@id":uuidUrl
-								},
-								"uco-observable:pageTitle":title, 
-								"uco-observable:visitCount":visit_count, 			
-								"uco-observable:manuallyEnteredCount":{
-									"@type":"xsd:nonNegativeInteger",
-									"@value":"0"
-								},
-								"uco-observable:keywordSearchTerm":"NULL"
-							}
-						]
-					}
-				]
-			}
-			
-			object_str = json.dumps(object_dict, indent = 4)
-			self.FileOut.write(object_str + ',\n')
-			
-			str_coe = self.__generateChainOfEvidence(WEBsource, WEBlocation, uuid, write_to_file=False)
-			return str_coe			
+			self.__generateChainOfEvidence(WEBsource, WEBlocation, observable)
 
 	def __generateTraceCellTower(self, cell_id, cell_mcc, cell_mnc, cell_lac, 
 		cell_cid, cell_longitude, cell_latitude, cell_timeStamp):
 
 		cell_timeStamp = self.__cleanDate(cell_timeStamp)
 
-		uuidLocation = self.__checkGeoCoordinates(cell_latitude, cell_longitude,
+		observable_location = self.__checkGeoCoordinates(cell_latitude, cell_longitude,
 			 '', 'Cell Tower')
 		
-		uuid = ''
-		if uuidLocation != '':
+		if observable_location is not None:
 			cell_id = cell_mcc.strip() + '@' + cell_mnc.strip() +'@' + \
 				cell_lac.strip() + '@' + cell_cid.strip()			
 	#---	identifier of the Cell Tower cannot be empty
 	#			
 			if cell_id != '@@@':
 				if cell_id in self.CELL_TOWER_gsm.keys():		
-					uuid = self.CELL_TOWER_gsm.get(cell_id)
+					return self.CELL_TOWER_gsm.get(cell_id)
 				else:
-					uuid = "kb:" + AXIOMtoJSON.__createUUID()
-					self.CELL_TOWER_gsm[cell_id] = uuid
-					object_dict = {
-						"@id": uuid,
-						"@type":"uco-observable:ObservableObject", 
-						"uco-observable:hasChanged":True,
-						"uco-core:hasFacet":[
-							{
-								"@type":"draft:CellTowerFacet",
-								"draft:mcc":cell_mcc,
-								"draft:mnc":cell_mnc,
-								"draft:lac":cell_lac,
-								"draft:cid":cell_cid,
-								"uco-observable:location":{
-									"@id":uuidLocation
-								}
-							}
-						]
-					}
-
-					object_str = json.dumps(object_dict, indent = 4)
-					self.FileOut.write(object_str + ',\n')
-			
-		return uuid
+					observable = uco.observable.ObservableObject()
+					facet_cell_tower = not_in_ontology.entities.FacetCellTower(mcc=cell_mcc, 
+					mnc=cell_mnc, lac=cell_lac, cid=cell_cid, location=observable_location)
+					observable.append_facets(facet_cell_tower)
+					self.bundle.append_to_uco_object(observable)
+				
+					self.CELL_TOWER_gsm[cell_id] = observable
+					return observable		
+		return None
 
 	def __generateTraceCookie(self, cookie_item_id, cookie_source,
-				cookie_name, cookie_value, cookie_domain, cookie_creationTime, 
-				cookie_lastAccessedTime, cookie_expirationTime):
+				cookie_name, cookie_value, cookie_domain, cookie_creation_time, 
+				cookie_last_accessed_time, cookie_expiry):
 
-		cookie_creationTime = self.__cleanDate(cookie_creationTime)
-		cookie_lastAccessedTime = self.__cleanDate(cookie_lastAccessedTime)
-		
-		cookie_expirationTime = self.__cleanDate(cookie_expirationTime)
+		cookie_creation_time = self.__cleanDate(cookie_creation_time)
+		cookie_last_accessed_time = self.__cleanDate(cookie_last_accessed_time)		
+		cookie_expiry = self.__cleanDate(cookie_expiry)
 		cookie_value = cookie_value.replace('"', '')
+		cookie_name = self.__cleanJSONtext(cookie_name)
 
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:BrowserCookieFacet", 
-					"draft:source":cookie_source,
-					"uco-observable:cookieName":cookie_name,
-					"uco-observable:cookiePath":cookie_value,
-					"uco-observable:cookieDomain":cookie_domain,
-					"uco-observable:observableCreatedTime":{ 
-						"@type":"xsd:dateTime",
-						"@value":cookie_creationTime
-					},
-					"uco-observable:lastAccessTime":{ 
-						"@type":"xsd:dateTime",
-						"@value":cookie_lastAccessedTime
-					},
-					"uco-observable:expirationTime":{ 
-						"@type":"xsd:dateTime",
-						"@value":cookie_expirationTime
-					}
-				}
-			]
-		}
-				
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
+		observable = uco.observable.ObservableObject()
+		
+		observable_source = self.__checkAppName(cookie_source)
+		observable_domain = self.__checkAppName(cookie_domain)
+		
+		cookie_creation_time = self.__convert_str_to_datetime(cookie_creation_time)
+		cookie_last_accessed_time = self.__convert_str_to_datetime(cookie_last_accessed_time)
+		cookie_expiry = self.__convert_str_to_datetime(cookie_expiry)
+		
+		facet_cookie = uco.observable.FacetBrowserCookie(source=observable_source, 
+			name=cookie_name, domain=observable_domain, 
+			created_time=cookie_creation_time, last_access_time=cookie_last_accessed_time, 
+			expiration_time=cookie_expiry)
+
+		observable.append_facets(facet_cookie)
+		self.bundle.append_to_uco_object(observable)
+		return observable
 
 	def __generateTraceLocationCoordinate(self, latitude, longitude, altitude, type):
-		
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
+		observable = uco.observable.ObservableObject()
 		id = latitude + '@' + longitude
-		self.LOCATION_lat_long_coordinate[id] = uuid
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-location:LatLongCoordinatesFacet",
-					"uco-location:latitude":latitude,
-					"uco-location:longitude":longitude,
-					"uco-location:altitude":altitude,
-					"draft:locationType":type
-				}
-			]
-		}
-		
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
+		self.LOCATION_lat_long_coordinate[id] = observable
 
+		latitude_decimal = float(latitude)
+		longitude_decimal = float(longitude)
+		
+		if altitude != '':
+			altitude_decimal = float(altitude)
+		else:
+			altitude_decimal = 0.00 
+
+		facet_location = uco.location.FacetLocation(latitude=latitude_decimal, 
+			longitude=longitude_decimal, altitude=altitude_decimal, location_type=type)
+		observable.append_facets(facet_location)
+		
+		self.bundle.append_to_uco_object(observable)
+		return observable
+
+		
 	def __generateTraceWinTimeline(self, timeline_id, timeline_app_name,
-				timeline_activity_type, timeline_timeStamp):
+				timeline_type, timeline_time_stamp):
 
-		timeline_timeStamp = self.__cleanDate(timeline_timeStamp)
-		if timeline_activity_type.strip() == '':
-			return ''
+		timeline_time_stamp = self.__cleanDate(timeline_time_stamp)
+		if timeline_type.strip() == '':
+			return None
 		
+		timeline_time_stamp = self.__convert_str_to_datetime(timeline_time_stamp)
 		timeline_app_name = self.__cleanJSONtext(timeline_app_name)			
-
-		uuid = "kb:" + AXIOMtoJSON.__createUUID()
-		object_dict = {
-			"@id": uuid,
-			"@type":"uco-observable:ObservableObject", 
-			"uco-observable:hasChanged":True,
-			"uco-core:hasFacet":[
-				{
-					"@type":"uco-observable:EventFacet", 
-					"uco-observable:observableCreatedTime":{ 
-						"@type":"xsd:dateTime",
-						"@value":timeline_timeStamp
-					},
-					"uco-observable:eventType":timeline_activity_type,
-					"uco-observable:eventText":timeline_app_name
-				}
-			]
-		}
+		event_text = self.__cleanJSONtext(timeline_app_name)
 		
-		object_str = json.dumps(object_dict, indent = 4)
-		self.FileOut.write(object_str + ',\n')
-		return uuid
+		observable = uco.observable.ObservableObject()		
+		facet_event = uco.observable.FacetEvent(event_type=timeline_type, 
+			event_text=event_text, created_time=timeline_time_stamp)
+		observable.append_facets(facet_event)
 
+		self.bundle.append_to_uco_object(observable)
+		return observable
 
 	def __generateTraceWirelessNet(self, wifi_id, wifi_mac_address, wifi_channel,
 		wifi_longitude, wifi_latitude, wifi_timeStamp, wifi_accuracy):
 		
 		wifi_timeStamp = self.__cleanDate(wifi_timeStamp)
+		wifi_mac_address = wifi_mac_address.strip()
 
-		uuidLocation = self.__checkGeoCoordinates(wifi_latitude, wifi_longitude,
+		observable_location = self.__checkGeoCoordinates(wifi_latitude, wifi_longitude,
 			 '', 'Wireless Network')
 
-		wifi_mac_address = wifi_mac_address.strip()
-		
-		uuid = ''
-		if wifi_mac_address != '':
-			if wifi_mac_address in self.WIRELESS_NET_mac_address.keys():
-				uuidWifi = self.WIRELESS_NET_mac_address[wifi_mac_address]
+		if observable_location is None:
+			return None
 
-			else:
-				uuid = "kb:" + AXIOMtoJSON.__createUUID()
-				self.WIRELESS_NET_mac_address[wifi_mac_address] = uuid
-				
-				object_dict = {
-					"@id": uuid,
-					"@type":"uco-observable:ObservableObject", 
-					"uco-observable:hasChanged":True,
-					"uco-core:hasFacet":[
-						{
-							"@type":"uco-observable:WirelessNetworkConnectionFacet", 
-							"uco-observable:macAddress":wifi_mac_address,
-							"draft:timeConnection":{
-								"@type":"xsd:dateTime",
-								"@value":wifi_timeStamp
-							},
-							"uco-observable:accuracy":wifi_accuracy,
-							"uco-observable:location":{
-								"@id":uuidLocation
-							}
-						}
-					]
-				}
-				object_str = json.dumps(object_dict, indent = 4)
-				self.FileOut.write(object_str + ',\n')
-			
-		return uuid
+		if wifi_mac_address.strip() == "":
+			return None 
+
+		if wifi_mac_address in self.WIRELESS_NET_mac_address.keys():
+			observable = self.WIRELESS_NET_mac_address[wifi_mac_address]
+		else:
+			observable = uco.observable.ObservableObject()
+			wifi_timeStamp = self.__convert_str_to_datetime(wifi_timeStamp)
+			#wnet_last_connection = self.__convert_str_to_datetime(wnet_last_connection)				
+			facet_wnet_connection = uco.observable.FacetWirelessNetworkConnection(
+				ssid=wifi_mac_address, location=observable_location, 
+				connection_time=wifi_timeStamp)
+			observable.append_facets(facet_wnet_connection)
+			self.bundle.append_to_uco_object(observable)
+			self.WIRELESS_NET_mac_address[wifi_mac_address] = observable
+			return observable
 
 	def writeCall(self, CALLid, CALLappName, CALLtimeStamp, CALLdirection, 
 				CALLduration, CALLpartner, CALLpartnerName, CALLsource, CALLlocation, 
@@ -1906,21 +1386,21 @@ class AXIOMtoJSON:
 					uuidPartner = self.CHATaccountIdList[idx]
 				else:
 					self.CHATparticipantsNameList.append(CALLpartner[i].strip())
-					uuidPartner = self.__generateTraceChatAccount(CALLsource[i].strip(),
-						CALLpartner[i].strip(), CALLpartner[i].strip(), idAppIdentity)
+					uuidPartner = self.__generateTraceApplicationAccount(CALLpartner[i].strip(), 
+						CALLpartner[i].strip(), idAppIdentity)
 					self.CHATparticipantsIdList.append(CALLpartner[i].strip())
 					self.CHATaccountIdList.append(uuidPartner)						
 
 			if CALLdirection[i].lower() == 'incoming':
 				uuid = self.__generateTracePhoneCall(CALLdirection[i].lower(), 
-					CALLtimeStamp[i], uuidPartner, self.phoneOwnerUuid, CALLduration[i],
-					CALLrecoveryMethod[i], callOutcome)
+					CALLtimeStamp[i], uuidPartner, self.observable_phone_owner, 
+					CALLduration[i], CALLrecoveryMethod[i], callOutcome)
 			else:
 				uuid = self.__generateTracePhoneCall(CALLdirection[i].lower(), 
-					CALLtimeStamp[i], self.phoneOwnerUuid, uuidPartner, CALLduration[i],
-					CALLrecoveryMethod[i], callOutcome)
+					CALLtimeStamp[i], self.observable_phone_owner, uuidPartner, 
+					CALLduration[i], CALLrecoveryMethod[i], callOutcome)
 			
-			self.__generateChainOfEvidence(CALLsource[i], CALLlocation[i], uuid)
+			self.__generateChainOfEvidence(CALLsource[i], CALLlocation[i], uuid)		
 
 	def ObservableRelationship(self, CONTACTname, CONTACTphoneNum,
 				CONTACTsource, CONTACTlocation, CONTACTrecoveryMethod):
@@ -1939,44 +1419,27 @@ class AXIOMtoJSON:
 					self.phoneUuidList.append(uuid)
 
 	def writeHeader(self):
-		uuid = AXIOMtoJSON.__createUUID()
-		line = "".join(['{ \n', \
-				AXIOMtoJSON.TAB + '"@context": { \n', \
-				AXIOMtoJSON.TAB*2 + '"@vocab":"http://caseontology.org/core#", \n', \
-				AXIOMtoJSON.TAB*2 + '"not-in-ontology":"https://not-in/ontology#", \n', \
-				AXIOMtoJSON.TAB*2 + '"draft":"http://example.org/draft#", \n', \
-				AXIOMtoJSON.TAB*2 + '"case-investigation":"https://caseontology.org/ontology/case/investigation#", \n', \
-				AXIOMtoJSON.TAB*2 + '"rdf":"http://www.w3.org/1999/02/22-rdf-syntax-ns#", \n', \
-				AXIOMtoJSON.TAB*2 + '"rdfs":"http://www.w3.org/2000/01/rdf-schema#", \n', \
-				AXIOMtoJSON.TAB*2 + '"uco-action":"https://unifiedcyberontology.org/ontology/uco/action#", \n', \
-				AXIOMtoJSON.TAB*2 + '"uco-core":"https://unifiedcyberontology.org/ontology/uco/core#", \n', \
-				AXIOMtoJSON.TAB*2 + '"uco-identity":"https://unifiedcyberontology.org/ontology/uco/identity#",\n', \
-				AXIOMtoJSON.TAB*2 + '"uco-role":"https://unifiedcyberontology.org/ontology/uco/role#",\n', \
-				AXIOMtoJSON.TAB*2 + '"uco-location":"https://unifiedcyberontology.org/ontology/uco/location#",\n', \
-				AXIOMtoJSON.TAB*2 + '"uco-observable":"https://unifiedcyberontology.org/ontology/uco/observable#", \n', \
-				AXIOMtoJSON.TAB*2 + '"uco-tool":"https://unifiedcyberontology.org/ontology/uco/tool#", \n', \
-				AXIOMtoJSON.TAB*2 + '"uco-types":"https://unifiedcyberontology.org/ontology/uco/types#", \n', \
-				AXIOMtoJSON.TAB*2 + '"uco-vocabulary":"https://unifiedcyberontology.org/ontology/uco/vocabulary#", \n', \
-#---	OLO is a method for representing lists, CASE didn't really need to implement itself, 
-#		implementing ordered lists in an OWL 2 DL compliant  syntax.				
-#				
-				AXIOMtoJSON.TAB*2 + '"olo":"http://purl.org/ontology/olo/core#", \n', \
-				AXIOMtoJSON.TAB*2 + '"xsd":"http://www.w3.org/2001/XMLSchema#" \n', \
-				AXIOMtoJSON.TAB*2 + '},\n', \
-				'"@id":":bundle-' + uuid + '", \n', \
-				'"@type":"uco-core:Bundle",\n', \
-				'"uco-core:specVersion":"CASE 0.4 - UCO 0.6",\n', \
-				'"uco-core:description":"Extraction from XML report generated by MAGNET AXIOM PROCESS",\n', \
-				'"uco-core:object": [\n'])
-		self.FileOut.write(line)
+		if self.bundle is None:			
+			uuid = AXIOMtoJSON.__createUUID()
+			uuid_identifier = 'bundle-' + uuid  
+			self.bundle = uco.core.Bundle(description="Extraction from XML report generated by MAGNET AXIOM PROCESS",
+				spec_version="CASE 0.4 - UCO 0.6", case_identifier=uuid_identifier)
 
 	def writeLastLine(self):
-		self.__generateLastLine()
+#---	Save a reference to the original standard output			
+		original_stdout = sys.stdout 
+#--	Change the standard output to the file we created.    		
+		sys.stdout = self.FileOut 
+				
+		print(self.bundle)
+
+#--	Restore the standard output to its default value
+		sys.stdout = original_stdout 
 
 	def writePhoneOwner(self, phoneOwnerNumber, phoneOwnerName):
 		self.phoneOwnerNumber = phoneOwnerNumber
 		mobileOperator = ""
-		self.__generateTracePhoneOwner(mobileOperator, phoneOwnerName, 
+		self.observable_phone_owner = self.__generateTracePhoneOwner(mobileOperator, phoneOwnerName, 
 				phoneOwnerNumber)
 
 
@@ -1995,23 +1458,19 @@ class AXIOMtoJSON:
 				else:
 					fileExt = FILEname[i][FILEname[i].rfind('.') + 1:]
 
-					uuid = self.__generateTraceFile(FILEname[i], FILEsize[i], 
+					file_observable = self.__generateTraceFile(FILEname[i], FILEsize[i], 
 						'MD5', FILEmd5[i],	FILEtag[i], FILEcreated[i], FILEmodified[i], 
 						FILEaccessed[i], FILElocalPath[i], fileExt,
 						FILEexifMake[i], FILEexifModel[i], FILEexifLatitudeRef[i], 
 						FILEexifLatitude[i], FILEexifLongitudeRef[i], 
 						FILEexifLongitude[i], FILEexifAltitude[i])
 
-					self.FILEuuid[file_id] = uuid
+					self.FILEuuid[file_id] = file_observable
 
 	def writeChat(self, CHATid, CHATsender, CHATreceiver, CHATdateTimeSent, 
 							CHATdateTimeReceived, CHATmessage, CHATmessageStatus, 
 							CHATapplication, CHATsource, CHATlocation, CHATrecoveryMethod):		
-
-		# print("len(CHATapplication)=" + str(len(CHATapplication)) )
-		# print(CHATapplication[len(CHATapplication) - 1])
-		# print("len(CHATid)=" + str(len(CHATid)) )
-		# print(CHATid[len(CHATid) - 1])
+		
 		CHATthreadParticipants = []
 		self.fillChatThread(CHATthreadParticipants, CHATid, CHATsender, CHATreceiver,
 				CHATdateTimeSent, CHATdateTimeReceived, CHATmessage, CHATmessageStatus,
@@ -2020,9 +1479,8 @@ class AXIOMtoJSON:
 
 		for i, chat_id in enumerate(self.CHATids):
 #---	CHATidAccountList contains the list of the Mesages uuid of CHATs
-#			CHATthread contains the values for the generation of the 
-#			ChatThreadFacet Observable	
-#								
+#		CHATthread contains the values for the generation of the ChatThreadFacet Observable	
+#											
 			self.CHATthread = []	
 			self.chatIdAccountList = []			
 			for j, chat_id_item in enumerate(chat_id):
@@ -2041,8 +1499,8 @@ class AXIOMtoJSON:
 				else:
 					CHATname = ''
 					self.CHATparticipantsNameList.append(CHATname)
-					CHATmsgFrom = self.__generateTraceChatAccount(self.CHATapplications[i][j].strip(),
-						self.CHATsenders[i][j].strip(), CHATname, idAppIdentity)
+					CHATmsgFrom = self.__generateTraceApplicationAccount(
+						CHATname, self.CHATsenders[i][j].strip(), idAppIdentity)
 					self.CHATparticipantsIdList.append(self.CHATsenders[i][j].strip())
 					self.CHATaccountIdList.append(CHATmsgFrom)
 
@@ -2052,8 +1510,8 @@ class AXIOMtoJSON:
 				else:
 					CHATname = ''
 					self.CHATparticipantsNameList.append(CHATname)
-					CHATmsgTo = self.__generateTraceChatAccount(self.CHATapplications[i][j].strip(),
-						self.CHATreceivers[i][j].strip(), CHATname, idAppIdentity)
+					CHATmsgTo = self.__generateTraceApplicationAccount(
+						CHATname, self.CHATreceivers[i][j].strip(), idAppIdentity)
 					self.CHATparticipantsIdList.append(self.CHATreceivers[i][j].strip())
 					self.CHATaccountIdList.append(CHATmsgTo)
 				
@@ -2063,66 +1521,65 @@ class AXIOMtoJSON:
 #								
 				if self.CHATmessageStatuses[i][j].lower().find('received') > - 1:
 					CHATdirection = 'Incoming'
-					CHATdate = self.CHATdateTimeReceiveds[i][j] 
+					CHATdate = self.__cleanDate(self.CHATdateTimeReceiveds[i][j])
 				else:			
 					CHATdirection = 'Outgoing'
-					CHATdate = self.CHATdateTimeSents[i][j]
+					CHATdate = self.__cleanDate(self.CHATdateTimeSents[i][j])
 								
 				CHATattachmentFileNames = ''
 				CHATattachmentUrls = ''
-				#print('before __generateTraceChat, FROM: ' + CHATmsgFrom +
-				#	', TO: ' + CHATmsgTo)
-
-				chatUuid = self.__generateTraceChat(self.CHATmessages[i][j], idAppIdentity, 
-					CHATdate, CHATmsgFrom, CHATmsgTo, self.CHATrecoveryMethods[i][j], 
-					self.CHATmessageStatuses[i][j], CHATdirection, CHATattachmentFileNames,
-					CHATattachmentUrls)
-				self.CHATthread.append(chatUuid)
+				CHATmsgToList = []
+				CHATmsgToList.append(CHATmsgTo)
+				observable_chat = self.__generateTraceChat(self.CHATmessages[i][j], idAppIdentity, 
+					CHATdate, CHATmsgFrom, CHATmsgToList, self.CHATrecoveryMethods[i][j], 
+					self.CHATmessageStatuses[i][j], CHATdirection, "CHAT Message",
+					CHATattachmentFileNames, CHATattachmentUrls)
+				self.CHATthread.append(observable_chat)
 
 #---	if there are not messages for this Chat or no ChatAccount has been
 # 		generated, the ThreadMessage is not generated. Moreover the Chain of
 # 		evidence is built upon the ThreadUuid
 #				
 			if (len(self.CHATthread) != 0):
-				uuidThread = self.__generateThreadMessages(self.CHATids[i][j], self.CHATthread, 
+				observable_thread = self.__generateThreadMessages(self.CHATids[i][j], self.CHATthread, 
 								[CHATmsgFrom, CHATmsgTo])
-				self.__generateChainOfEvidence(CHATsource[i], CHATlocation[i], chatUuid)
+				self.__generateChainOfEvidence(CHATsource[i], CHATlocation[i], 
+					observable_thread)
 
-	def writeDeviceEvent(self, EVENT_LOCKid, EVENT_LOCKstatus, 
-                EVENT_LOCKdateTime, EVENT_LOCKsource, EVENT_LOCKlocation, 
-                EVENT_LOCKrecoveryMethod):
-		for i, device_event_id in enumerate(EVENT_LOCKid):
-			uuid= self.__generateTraceDeviceEvent(device_event_id, 
-				EVENT_LOCKdateTime[i], 'Device Lock Status', EVENT_LOCKstatus[i])
-			if uuid != '':
-				self.__generateChainOfEvidence(EVENT_LOCKsource[i], 
-					EVENT_LOCKlocation[i], uuid)
+	def writeDeviceEvent(self, EVENT_LOCK_id, EVENT_LOCK_status, 
+                EVENT_LOCK_dateTime, EVENT_LOCK_source, EVENT_LOCK_location, 
+                EVENT_LOCK_recoveryMethod):
+		for i, device_event_id in enumerate(EVENT_LOCK_id):
+			observable_event = self.__generateTraceDeviceEvent(device_event_id, 
+				EVENT_LOCK_dateTime[i], 'Device Lock Status', EVENT_LOCK_status[i])
+			if observable_event is not None:
+				self.__generateChainOfEvidence(EVENT_LOCK_source[i], 
+					EVENT_LOCK_location[i], observable_event)
 
-	def writeAppUsage(self, EVENT_APP_USEid, EVENT_APP_USEapplication, 
-                EVENT_APP_USEstartTime, EVENT_APP_USEendTime,
-                EVENT_APP_USEsource, EVENT_APP_USElocation, 
-                EVENT_APP_USErecoveryMethod):
+	def writeAppUsage(self, EVENT_APP_USE_id, EVENT_APP_USE_application, 
+                EVENT_APP_USE_start_time, EVENT_APP_USE_end_time,
+                EVENT_APP_USE_source, EVENT_APP_USE_location, 
+                EVENT_APP_USE_recoveryMethod):
 
-		for i, application in enumerate(EVENT_APP_USEapplication):
-			uuid= self.__generateTraceAppUsage(EVENT_APP_USEid[i], 
-				EVENT_APP_USEstartTime[i], EVENT_APP_USEendTime[i],
+		for i, application in enumerate(EVENT_APP_USE_application):
+			observable_app_usage= self.__generateTraceAppUsage(EVENT_APP_USE_id[i], 
+				EVENT_APP_USE_start_time[i], EVENT_APP_USE_end_time[i],
 				'Application Usage', application)
-			if uuid != '':
-				self.__generateChainOfEvidence(EVENT_APP_USEsource[i], 
-					EVENT_APP_USElocation[i], uuid)
+			if observable_app_usage is not None:
+				self.__generateChainOfEvidence(EVENT_APP_USE_source[i], 
+					EVENT_APP_USE_location[i], observable_app_usage)
 
 
 	def writeEmail(self, EMAILid, EMAILapp, EMAILidentifierFROM, 
 				EMAILidentifiersTO, EMAILidentifiersCC, EMAILidentifiersBCC, 
 				EMAILbody, EMAILsubject, EMAILtimeStamp, EMAILattachmentsFilename,
 				EMAILsource, EMAILlocation, EMAILrecoveryMethod):
-		
-		for i, email_id in enumerate(EMAILid):
+				
+		for i, email_id in enumerate(EMAILid):			
 			self.__generateTraceEmail(email_id, EMAILrecoveryMethod[i], EMAILsource[i],
 				EMAILlocation[i], EMAILidentifierFROM[i], EMAILidentifiersTO[i], 
 				EMAILidentifiersCC[i], EMAILidentifiersBCC[i], EMAILbody[i], 
 				EMAILsubject[i], EMAILtimeStamp[i], EMAILattachmentsFilename[i])
-
 
 	def writeDeviceDisk(self,FILE_SYS_INFOvolumeSn, FILE_SYS_INFOfileSystem, 
 		FILE_SYS_INFOcapacity, FILE_SYS_INFOunallocated, FILE_SYS_INFOallocated,
@@ -2134,22 +1591,22 @@ class AXIOMtoJSON:
 				DEVICEcapacity += int(capacity)
 
 		partitions_ref = []
-		for i, volume in enumerate(FILE_SYS_INFOvolumeSn):
+		for i, s_n in enumerate(FILE_SYS_INFOvolumeSn):
 			if FILE_SYS_INFOcapacity[i] != '':
-				partition_uuid =  self.__generateTraceDiskPartition(volume, 
+				object_partition =  self.__generateTraceDiskPartition(s_n, 
 					FILE_SYS_INFOfileSystem[i], FILE_SYS_INFOcapacity[i],
 					FILE_SYS_INFOunallocated[i], FILE_SYS_INFOallocated[i],
 					FILE_SYS_INFOoffset[i])
-				partitions_ref.append(partition_uuid)
+				partitions_ref.append(object_partition)
 
 		if partitions_ref:
-			self.DEVICEuuid =  self.__generateTraceDeviceDisk(DEVICEcapacity, partitions_ref)
+			self.observable_device =  self.__generateTraceDeviceDisk(DEVICEcapacity, partitions_ref)
 
 	def writeDeviceMobile(self, DEVICEid, DEVICEimsi, DEVICEbluetoothAddress, 
 		DEVICEbluetoothName, DEVICEimei, DEVICEserialNumber, DEVICEname, 
 		DEVICEmodel, DEVICEiccid, DEVICEosVersion):
 	
-		self.DEVICEuuid =  self.__generateTraceDeviceMobile(DEVICEid, DEVICEimsi, 
+		self.observable_device =  self.__generateTraceDeviceMobile(DEVICEid, DEVICEimsi, 
 			DEVICEbluetoothAddress, DEVICEbluetoothName, DEVICEimei, DEVICEserialNumber, 
 			DEVICEname, DEVICEmodel, DEVICEiccid, DEVICEosVersion)
 
@@ -2159,18 +1616,17 @@ class AXIOMtoJSON:
 
 		str_coe = ''
 		for i in range(len(WEB_PAGEid) - 1):
-			str_coe += self.__generateTraceWebPages(WEB_PAGEid[i], WEB_PAGEsource[i], WEB_PAGEurl[i], 
+			self.__generateTraceWebPages(WEB_PAGEid[i], WEB_PAGEsource[i], WEB_PAGEurl[i], 
 					WEB_PAGEtitle[i], WEB_PAGEvisitCount[i],  WEB_PAGlastVisited[i],
 					WEBsource[i], WEBlocation[i], WEBrecoveryMethod[i])		
 		
 #--- last char is space not comma when i == len(WEB_PAGEid)
 #			
 		if len(WEB_PAGEid) > 0:
-			str_coe += self.__generateTraceWebPages(WEB_PAGEid[i], WEB_PAGEsource[i], WEB_PAGEurl[i], 
+			self.__generateTraceWebPages(WEB_PAGEid[i], WEB_PAGEsource[i], WEB_PAGEurl[i], 
 					WEB_PAGEtitle[i], WEB_PAGEvisitCount[i],  WEB_PAGlastVisited[i],
 					WEBsource[i], WEBlocation[i], WEBrecoveryMethod[i])
 			self.FileOut.write(str_coe[0:-2])
-
 	
 	def writeCell_Tower(self, CELL_TOWERid, CELL_TOWERmcc,
                 CELL_TOWERmnc, CELL_TOWERlac, CELL_TOWERcid, 
@@ -2179,68 +1635,66 @@ class AXIOMtoJSON:
                 CELL_TOWERlocation, CELL_TOWERrecoveryMethod):
 
 		for i, cell_tower_id in enumerate(CELL_TOWERid):			
-			uuid = self.__generateTraceCellTower(cell_tower_id, CELL_TOWERmcc[i],
+			observable_cell_tower = self.__generateTraceCellTower(cell_tower_id, CELL_TOWERmcc[i],
 				CELL_TOWERmnc[i], CELL_TOWERlac[i],CELL_TOWERcid[i], 
                 CELL_TOWERlongitude[i], CELL_TOWERlatitude[i], CELL_TOWERtimeStamp[i])
 			
-			if uuid != '':
-				self.__generateTraceRelation(self.phoneOwnerUuid, uuid, 'Located_At', 
-				'', '', CELL_TOWERtimeStamp[i], '')
+			if observable_cell_tower is not None:
+				self.__generateTraceRelation(self.observable_phone_owner, 
+					observable_cell_tower, 'Located_At', '', '', CELL_TOWERtimeStamp[i], '')
 				self.__generateChainOfEvidence(CELL_TOWERsource[i], 
-					CELL_TOWERlocation[i], uuid)
+					CELL_TOWERlocation[i], observable_cell_tower)		
 
 	def writeCookie(self, COOKIEid, COOKIEappSource, COOKIEname, COOKIEpath, COOKIEdomain, 
 				COOKIEcreatedDate, COOKIEaccessedDate, COOKIEexpirationDate, 
                 COOKIEsource, COOKIElocation, COOKIErecoveryMethod):
 
 		for i, cookie_item_id in enumerate(COOKIEid):			
-			uuid = self.__generateTraceCookie(cookie_item_id, COOKIEappSource[i],
+			observable_cookie = self.__generateTraceCookie(cookie_item_id, COOKIEappSource[i],
 				COOKIEname[i], COOKIEpath[i], COOKIEdomain[i], COOKIEcreatedDate[i], 
 				COOKIEaccessedDate[i], COOKIEexpirationDate[i])
 			
-			if uuid != '':
-				self.__generateChainOfEvidence(COOKIEsource[i], COOKIElocation[i], uuid)
+			if observable_cookie is not None:
+				self.__generateChainOfEvidence(COOKIEsource[i], COOKIElocation[i], 
+					observable_cookie)
 
 	def writeWinTimeline(self, WIN_TIMELINEid, WIN_TIMELINEappName, WIN_TIMELINEactivityType, 
 				WIN_TIMELINEtimeStamp, WIN_TIMELINEsource, WIN_TIMELINElocation, 
                 WIN_TIMELINErecoveryMethod):
 
 		for i, timeline_item_id in enumerate(WIN_TIMELINEid):			
-			uuid = self.__generateTraceWinTimeline(timeline_item_id, WIN_TIMELINEappName[i],
+			observable_win_timeline = self.__generateTraceWinTimeline(timeline_item_id, WIN_TIMELINEappName[i],
 				WIN_TIMELINEactivityType[i], WIN_TIMELINEtimeStamp[i])
 			
-			if uuid != '':
-				self.__generateChainOfEvidence(WIN_TIMELINEsource[i], WIN_TIMELINElocation[i], uuid)
+			if observable_win_timeline is not None:
+				self.__generateChainOfEvidence(WIN_TIMELINEsource[i], 
+					WIN_TIMELINElocation[i], observable_win_timeline)
 
-
-
-#---	last Observables: they are not directly written into the file, but
-#		put in a string to get rid of the last comma
-#			
 	def writeLocationDevice(self, LOCATIONid, LOCATIONtype, LOCATIONlatitude,  
 		LOCATIONlongitude, LOCATIONcreated, LOCATIONsource, LOCATIONlocation):
 
 		str_coe = ''
 		for i, location_id in enumerate(LOCATIONid):
-			uuid= self.__generateTraceLocationDevice(location_id, LOCATIONlongitude[i], 
+			observable_location= self.__generateTraceLocationDevice(location_id, LOCATIONlongitude[i], 
 				LOCATIONlatitude[i], 'Significant Location')
 			
-			if uuid != '':
-				self.__generateTraceRelation(self.DEVICEuuid, uuid, 'Mapped_By', 
-				'', '', LOCATIONcreated[i], '')
-				str_coe += self.__generateChainOfEvidence(LOCATIONsource[i], 
-					LOCATIONlocation[i], uuid)		
+			if observable_location is not None:
+				self.__generateTraceRelation(self.observable_device, observable_location, 
+					'Mapped_By', '', '', LOCATIONcreated[i], '')
+				self.__generateChainOfEvidence(LOCATIONsource[i], 
+					LOCATIONlocation[i], observable_location)		
 
 	def writeSearched_Item(self, SEARCHED_ITEMid, SEARCHED_ITEMvalue, SEARCHED_ITEMtimeStamp, 
 				SEARCHED_ITEMappSource, SEARCHED_ITEMsource, SEARCHED_ITEMlocation, 
                 SEARCHED_ITEMrecoveryMethod):
 
 		for i, searched_item_id in enumerate(SEARCHED_ITEMid):			
-			uuid = self.__generateTraceSearchedItem(searched_item_id, SEARCHED_ITEMvalue[i],
+			observable_searched = self.__generateTraceSearchedItem(searched_item_id, SEARCHED_ITEMvalue[i],
 				SEARCHED_ITEMtimeStamp[i], SEARCHED_ITEMappSource[i])
 			
-			if uuid != '':
-				self.__generateChainOfEvidence(SEARCHED_ITEMsource[i], SEARCHED_ITEMlocation[i], uuid)
+			if observable_searched is not None:
+				self.__generateChainOfEvidence(SEARCHED_ITEMsource[i], 
+					SEARCHED_ITEMlocation[i], observable_searched)
 		
 	def writeSms(self, SMSid, SMSsender, SMSrecipient, SMSreceivedDateTime,
 					SMSsentDateTime, SMSmessage, SMSdirection, SMSsource,
@@ -2252,7 +1706,6 @@ class AXIOMtoJSON:
 			SMSsenderClean = SMSsender[i].strip()
 			if SMSsenderClean.lower() == 'local user':
 				SMSsenderClean = self.phoneOwnerNumber
-
 
 #---	get rid of hex chars byte not accepted in JSON values
 #			
@@ -2289,50 +1742,32 @@ class AXIOMtoJSON:
 				self.phoneUuidList.append(phoneRecipientUuid)
 
 
-			body = SMSmessage[i].replace('\n', ' ')
-			body = body.replace('"', "'")
-			body = body.replace('\t', ' ')
-			body = body.replace("\\'", "'")
-			body = body.replace("\\", "")
-			#body = '?'.join(hex(ord(x))[2:] for x in body)
+			body = self.__cleanJSONtext(SMSmessage[i])
 
+						
 			if SMSreceivedDateTime[i] == '':
 				phoneUuidFrom = phoneParticipantUuid
-				phoneUuidTo = '{"@id":"' + phoneRecipientUuid + '"}'	
+				phoneUuidTo = phoneRecipientUuid
 				SMSdate = SMSsentDateTime[i]
+				direction = "Outgoing"
 			else:
 				phoneUuidFrom = phoneRecipientUuid
-				phoneUuidTo = '{"@id":"' + phoneParticipantUuid + '"}'	
+				phoneUuidTo = phoneParticipantUuid
 				SMSdate = SMSreceivedDateTime[i]
+				direction = "Incoming"
 
-			phoneUuidTo = json.loads('[' + phoneUuidTo + ']')
-			uuid = "kb:" + AXIOMtoJSON.__createUUID()
+			
 			SMSdate = self.__cleanDate(SMSdate)
-			object_dict = {
-				"@id": uuid,
-				"@type":"uco-observable:ObservableObject", 
-				"uco-observable:hasChanged":True,
-				"uco-core:hasFacet":[ 
-					{
-						"@type":"uco-observable:MessageFacet",
-						"uco-observable:messageText":body,
-						"uco-observable:messageType":"SMS/Native Message",
-						"uco-observable:allocationStatus":SMSrecoveryMethod[i],
-						"uco-observable:from":{
-							"@id":phoneUuidFrom
-						},
-						"uco-observable:to":phoneUuidTo,
-						"uco-observable:sentTime":{
-							"@type":"xsd:dateTime", 
-							"@value":SMSdate
-						}
-					}
-				]
-			}
-						
-			object_str = json.dumps(object_dict, indent = 4)
-			self.FileOut.write(object_str + ',\n')
-			self.__generateChainOfEvidence(SMSsource[i], SMSlocation[i], uuid)
+			observable_app = self.__checkAppName("Native")
+			SMSphoneListTo = []
+			SMSphoneListTo.append(phoneUuidTo)
+			observable_message = self.__generateTraceChat(SMSmessage[i], observable_app, 
+				SMSdate, phoneUuidFrom, SMSphoneListTo, SMSrecoveryMethod[i], 
+				"outcome not available", direction, "SMS/Native Message", "", "")
+
+			if observable_message is not None:
+				self.__generateChainOfEvidence(SMSsource[i], SMSlocation[i], 
+					observable_message)
 
 	def writeWireless_Net(self, WIRELESS_NETid, WIRELESS_NETmacAddress,
                 WIRELESS_NETchannel, WIRELESS_NETlongitude, WIRELESS_NETlatitude,
@@ -2340,15 +1775,15 @@ class AXIOMtoJSON:
                 WIRELESS_NETlocation, WIRELESS_NETrecoveryMethod):
 
 		for i, wifi_id in enumerate(WIRELESS_NETid):			
-			uuid = self.__generateTraceWirelessNet(wifi_id, WIRELESS_NETmacAddress[i],
+			observable_wi_net = self.__generateTraceWirelessNet(wifi_id, WIRELESS_NETmacAddress[i],
 				WIRELESS_NETchannel[i], WIRELESS_NETlongitude[i], WIRELESS_NETlatitude[i], 
 				WIRELESS_NETtimeStamp[i], WIRELESS_NETaccuracy[i])
 			
-			if uuid != '':
-				self.__generateTraceRelation(self.phoneOwnerUuid, uuid, 'Connected_To', 
-				'', '', WIRELESS_NETtimeStamp[i], '')
+			if observable_wi_net is not None:
+				self.__generateTraceRelation(self.observable_phone_owner, observable_wi_net, 
+					'Connected_To', '', '', WIRELESS_NETtimeStamp[i], '')
 				self.__generateChainOfEvidence(WIRELESS_NETsource[i], 
-					WIRELESS_NETlocation[i], uuid)
+					WIRELESS_NETlocation[i], observable_wi_net)
 
 	def writeContextAxiom(self, axiomVersionText, deviceExtractionStartTime, 
 		deviceAcquisitionStartTime, deviceAcquisitionEndTime, examinerNameText,

@@ -1,0 +1,3 @@
+[submodule "case_builder"]
+	path = case_builder
+	url = ssh://git@ccilab.ucd.ie:2332/inspectr/case_builder.git

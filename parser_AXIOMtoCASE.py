@@ -7,7 +7,7 @@ import string
 import argparse
 import os
 import codecs
-import AXIOMtoJSON as CJ
+import AXIOMtoJSON as AJ
 import re
 import timeit
 import sys
@@ -15,13 +15,15 @@ from time import localtime, strftime
 # import logging
 
 
-class AXIOMgadget():
-    def __init__(self, xmlReport, jsonCASE, reportType, baseLocalPath, verbose=False):
-        self.xmlReport = xmlReport
-        self.jsonCASE = jsonCASE
-        self.reportType = reportType
-        self.baseLocalPath = os.path.join(baseLocalPath,  'Attachments')
+class AXIOMparser():
+    def __init__(self, report_xml=None, json_output=None, report_type=None, 
+        base_local_path="", case_bundle=None, verbose=False):
+        self.xmlReport = report_xml
+        self.jsonCASE = json_output
+        self.reportType = report_type
+        self.baseLocalPath = os.path.join(base_local_path,  'Attachments')
         self.tic_start = timeit.default_timer()
+        self.bundle = case_bundle
         self.verbose = verbose
         # logging.basicConfig(filename='_axiom_log.txt', level=logging.INFO,
         #     filemode='w', format='%(asctime)s - %(levelname)s - %(message)s')
@@ -76,7 +78,7 @@ class AXIOMgadget():
 #       indicates if the line with comma plus return must be written before
 #       writing the next ObservableObject   
 #
-        caseTrace = CJ.AXIOMtoJSON(Handler.fOut)
+        caseTrace = AJ.AXIOMtoJSON(json_output=Handler.fOut, case_bundle=self.bundle)
 
 
 #---    write CASE @context, version and description JSON file
@@ -2858,8 +2860,6 @@ if __name__ == '__main__':
 
     parserArgs.add_argument('-o', '--output', dest='outCASE_JSON', required=True, help='File CASE-JSON-LD of output')
 
-    parserArgs.add_argument('-d', '--debug', dest='outputDebug', required=False, help='File for writing debug')
-
     args = parserArgs.parse_args()
 
 
@@ -2886,24 +2886,9 @@ if __name__ == '__main__':
 #    
     baseLocalPath = ''
 
-    gadget = AXIOMgadget(args.inFileXML, args.outCASE_JSON, 
-        args.inTypeEvidence, baseLocalPath, verbose=True)    
+    parser_axiom = AXIOMparser(report_xml=args.inFileXML, json_output=args.outCASE_JSON, 
+        report_type=args.inTypeEvidence, base_local_path=baseLocalPath, verbose=True) 
     
-    Handler = gadget.processXmlReport()
-    
+    Handler = parser_axiom.processXmlReport()    
 
-    if args.outputDebug is None:
-        pass
-    else:
-        import AXIOMdebug
-        debug = AXIOMdebug.ParserDebug(args.outputDebug)
-        debug.writeDebugCALL(Handler)
-        debug.writeDebugCHAT(Handler)
-        debug.writeDebugCONTACT(Handler)
-        debug.writeDebugFILE(Handler)
-        debug.writeDebugEMAIL(Handler)
-        debug.writeDebugSMS(Handler)
-        debug.writeDebugWEB(Handler)
-        debug.closeDebug() 
-
-    gadget.show_elapsed_time(gadget.tic_start, 'End processing')
+    parser_axiom.show_elapsed_time(parser_axiom.tic_start, 'End processing')
