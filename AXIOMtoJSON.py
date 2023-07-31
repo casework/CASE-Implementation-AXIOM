@@ -424,11 +424,13 @@ class AXIOMtoJSON:
 			initialDate = re.sub('(T\d{2}:\d{2}:\d{2})(.+)$', '\g<1>', initialDate)
 			
 		if initialDate.find('+') > -1:
-			initialDate = datetime.strptime(initialDate, 
-				'%Y-%m-%dT%H:%M:%S.%f%z')
+			# some dirty characters may be wrongly included in the date
+			initialDate = initialDate[0:30]
+			initialDate = datetime.strptime(initialDate, '%Y-%m-%dT%H:%M:%S.%f%z')
 		else:
-			initialDate = datetime.strptime(initialDate, 
-				'%Y-%m-%dT%H:%M:%S')
+			# some dirty characters may be wrongly included in the date
+			initialDate = initialDate[0:19]
+			initialDate = datetime.strptime(initialDate, '%Y-%m-%dT%H:%M:%S')
 			
 		return initialDate
 
