@@ -7,7 +7,6 @@ import argparse
 import os
 import codecs
 import AXIOMtoJSON as CJ
-from CASE_generator import *
 #from inspectrutils.case_builder import *
 import timeit
 from time import localtime, strftime

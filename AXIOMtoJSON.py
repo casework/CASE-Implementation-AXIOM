@@ -7,7 +7,7 @@ import re
 import sys
 #import logging
 #from inspectrutils.case_builder import *
-from CASE_generator import *
+from AXIOM_case_generator import *
 from datetime import datetime
 
 class AXIOMtoJSON:
@@ -128,23 +128,6 @@ class AXIOMtoJSON:
 			new_text = new_text.replace('�', '')
 			return new_text
 
-	
-	def __convert_str_to_datetime(self, str_date):
-		'''	
-		Convert the date in string format into dateTime format.
-		: param str_date: The date in string format to be converted (string).
-		: return: The date in dateTime format text (datetime).
-		'''			
-		if str_date.strip() == "":
-			str_date = "1900-01-01T00:00:00"
-		if str_date.find('+') > -1:
-			date_time = datetime.strptime(str_date, 
-				'%Y-%m-%dT%H:%M:%S.%f%z')
-		else:
-			date_time = datetime.strptime(str_date, 
-				'%Y-%m-%dT%H:%M:%S')
-		
-		return date_time
 	
 	def __checkAppName(self, name):
 		'''	
