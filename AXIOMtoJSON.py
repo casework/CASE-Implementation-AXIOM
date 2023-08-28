@@ -1549,7 +1549,7 @@ class AXIOMtoJSON:
 #		be iterated to find the right Party	
 				if self.CHATmessageStatuses[i][j].lower().find('received') > - 1:
 					CHATdirection = 'Incoming'
-					CHATdate = self.__cleanDate(self.CHATdateTimeReceiveds[i][j])
+					CHATdate = self.__cleanDate(self.CHATdateTimeReceiveds[i][j])					
 				else:			
 					CHATdirection = 'Outgoing'
 					CHATdate = self.__cleanDate(self.CHATdateTimeSents[i][j])

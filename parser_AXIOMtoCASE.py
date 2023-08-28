@@ -82,19 +82,15 @@ class AXIOMparser():
 				print("".join([Handler.C_cyan, "owner's phone number / name: ", Handler.CALLphoneNumberDevice,
 					' / ', Handler.CALLphoneNameDevice,  '\n', Handler.C_end]))
 
-
 		#---    create object and open JSON file and define the boolean value that
 		#       indicates if the line with comma plus return must be written before
 		#       writing the next ObservableObject   
 		caseTrace = CJ.AXIOMtoJSON(json_output=Handler.fOut, case_bundle=self.bundle)
 
-
 		#---    write CASE @context, version and description JSON file
 		caseTrace.writeHeader()
 
-
 		#---    write phoneAccountFacet for the device phone number
-
 		if self.reportType == 'mobile':
 			caseTrace.writeDeviceMobile(Handler.DEVICEidText, Handler.DEVICEimsiText,
 				                        Handler.DEVICEbluetoothAddressText, Handler.DEVICEbluetoothNameText, 
@@ -324,7 +320,7 @@ class ExtractTraces(xml.sax.ContentHandler):
 			'Android Telegram Messages', 'iOS Telegram Messages', 'iOS Telegram Chats', 
 		    'Snapchat Chat Messages', 'TikTok Messages', 'Instagram Direct Messages',
 		    'Signal Messages', 'Signal Messages - Windows', 'Signal Messages - iOS', 
-		    'Facebook Messenger Messages', 'Discord Messages', 'LINE Messages')
+		    'Facebook Messenger Messages', 'Discord Messages', 'LINE Messages', 'Skype Activity')
 		self.CHATin = False
 		self.CHATinSender = False
 		self.CHATinReceiver = False
@@ -1324,53 +1320,43 @@ class ExtractTraces(xml.sax.ContentHandler):
 		:return:  None.
 		'''		
 #---    the first condition is for Android WhatsApp Messages, iOS WhatsApp Messages
-#       and for Snapchat Chat Messages, the second condition is for iOS Telegram Messages
+#       and Snapchat Chat Messages, 
+#       the second condition is for iOS Telegram Messages
 		if attrFragment in ('Sender', 'Sender Name', 'Last Sender'):  
 			self.CHATinSender = True 
-
 #---    the first condition is for Android WhatsApp Messages and iOS WhatsApp Messages
 #       the second condition is for iOS Telegram Messages
 #       the third condition is for Snapchat Chat Messages            
-		if attrFragment in ('Receiver', 'Receiver Name', 'Recipient Name', 'Recipient', 
-		                    'Recipient(s)'): 
+		elif attrFragment in ('Receiver', 'Receiver Name', 'Recipient Name', 'Recipient', 'Recipient(s)'): 
 			self.CHATinReceiver = True 
-
 #---    the condition is for Android Telegram Messages
-		if attrFragment in ('Partner', 'Participant Information', 'Conversation Name'): 
+		elif attrFragment in ('Partner', 'Participant Information', 'Conversation Name'): 
 			self.CHATinPartner = True 
-
-		if (attrFragment.find('Message Sent Date/Time') > -1 or 
+		elif (attrFragment.find('Message Sent Date/Time') > -1 or 
 		    attrFragment.find('Message Received Date/Time') > -1):              
 			self.CHATinDateTimeReceived = True            
-
 #---    the first condition is for iOS WhatsApp Messages
 #       the second condition is for Telegram Messages   
-		if (attrFragment.find('Message Date/Time') > -1 or 
+		elif (attrFragment.find('Message Date/Time') > -1 or 
 		    attrFragment.find('Creation Date/Time') > -1 or 
 		    attrFragment.find('Date/Time', 0) > - 1 or
 		    attrFragment.find('Last Message Date/Time', 0) > - 1 or
 		    attrFragment == 'Created Date/Time'):  
 			self.CHATinDateTime = True
-
-#---    the first condition is for WhatsApp Messages
+			#---    the first condition is for WhatsApp Messages
 #       the second condition is for Telegram Messages   
-		if attrFragment in ('Message', 'Message Body', 'Text', 'Last Message'):
+		elif attrFragment in ('Message', 'Message Body', 'Text', 'Last Message'):
 			self.CHATinMessage = True 
-
-		if attrFragment == 'Message Status':  
+		elif attrFragment == 'Message Status':  
 			self.CHATinMessageStatus = True 
-
 #---    only for iOS Whatsapp, Telegram and Skype Messages 
-		if attrFragment in ('Message Type', 'Conversation Type'):  
+		elif attrFragment in ('Message Type', 'Conversation Type'):  
 			self.CHATinMessageType = True 
-
-		if attrFragment == 'Source':  
+		elif attrFragment == 'Source':  
 			self.CHATinSource = True
-
-		if attrFragment == 'Location':  
+		elif attrFragment == 'Location':  
 			self.CHATinLocation = True 
-
-		if attrFragment.lower() == 'recovery method':  
+		elif attrFragment.lower() == 'recovery method':  
 			self.CHATinRecoveryMethod = True 
 
 
@@ -1445,7 +1431,6 @@ class ExtractTraces(xml.sax.ContentHandler):
 			self.DEVICEinName = True
 		elif attrFragment == 'IMSI':
 			self.DEVICEinImsi = True
-			print(f'DEVICEinImsi True')
 		elif attrFragment == 'IMSE':
 			self.DEVICEinImei = True
 		elif attrFragment == 'Model ID':
@@ -2220,7 +2205,7 @@ class ExtractTraces(xml.sax.ContentHandler):
 			self.CHATdateTimeReceivedText = ''
 			self.CHATinDateTimeReceived = False
 		elif self.CHATinMessage:
-			self.CHATmessage[self.CHATtotal - 1] = self.CHATmessageText
+			self.CHATmessage[self.CHATtotal - 1] = self.CHATmessageText			
 			self.CHATmessageText = ''
 			self.CHATinMessage = False
 		elif self.CHATinMessageStatus:
