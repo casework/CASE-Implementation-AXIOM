@@ -255,7 +255,7 @@ class ContentData(ObjectFacet):
 
 class Application(ObjectFacet):
 
-    def __init__(self, app_name=None, os=None):
+    def __init__(self, app_name=None, app_identifier=None, installed_version_history=None, num_launches=None, os=None, version=None):
         """
         A simple application
         :param app_name: Name of application (e.g. Native, Facebook, WhatsApp, etc.)
@@ -263,9 +263,26 @@ class Application(ObjectFacet):
         super().__init__()
         self["@type"] = "uco-observable:ApplicationFacet"
         self._set_properties_str(**{"uco-core:name": app_name,
-            'uco-observable:operatingSystem': os})
+            "uco-observable:applicationIdentifier": app_identifier,
+            "uco-observable:version": version,
+            "uco-observable:operatingSystem": os})
+        self._set_properties_int(**{"uco-observable:numberOfLaunches": num_launches})
+        self._set_properties_id_reference(**{"uco-observable:installedVersionHistory": installed_version_history})                                    
 
-
+class ApplicationVersion(ObjectFacet):
+    """
+    A simple application version to manage the installed application
+    :param install_date: The date when the application was installed/purchased on the device
+    """
+    def __init__(self, install_date):
+        """
+        A simple application
+        :param install_date: installation date of an application
+        """
+        super().__init__()
+        self["@type"] = "uco-observable:ApplicationVersion"
+        self._set_properties_date_time(**{"uco-observable:installDate": install_date})    
+    
 class DataRange(ObjectFacet):
 
     def __init__(self, range_offset=None, range_size=None):
@@ -310,6 +327,23 @@ class WifiAddress(ObjectFacet):
         self._set_properties_str(**{"uco-observable:addressValue": wifi_mac_address})
 
 
+class BrowserBookmark(ObjectFacet):
+    def __init__(self, bookmark_source=None, url=None, bookmark_path=None, bookmark_accessed_time=None):
+        """
+        :param source:
+        :param url:
+        :param path:
+        :param manually_entered_count:
+        :param accessed_time: An observable object with a URLFacet
+        """
+        super().__init__()
+        
+        self['@type'] = 'uco-observable:BrowserBookmarkFacet'
+
+        self._set_properties_str(**{'uco-observable:bookmarkPath': bookmark_path})                                
+        self._set_properties_date_time(**{'uco-observable:observableCreatedTime': bookmark_accessed_time})                                      
+        self._set_properties_id_reference(**{'uco-observable:application':bookmark_source, 'uco-observable:urlTargeted': url})
+        
 class BluetoothAddress(ObjectFacet):
 
     def __init__(self, name=None, address=None):
@@ -666,14 +700,14 @@ class CalendarEntry(ObjectFacet):
         super().__init__()
         self["@type"] = "uco-observable:CalendarEntryFacet"
         self._set_properties_str(**{"drafting:group": group,
-            "observable:subject": subject,
+            "uco:observable:subject": subject,
             "drafting:details": details,
             "drafting:repeatInterval": repeat_interval,  # todo: type?
             'uco-observable:eventStatus': status,
             'uco-observable:recurrence': recurrence,            
             'uco-observable:remindTime': remind_time,
             "drafting:repeatUntil": repeat_until,
-            'observable:isPrivate': private})
+            'uco:observable:isPrivate': private})
         self._set_properties_date_time(**{"uco-observable:startTime": start_time,
             "uco-observable:endTime": end_time})
         #self.append_attendants(attendants)

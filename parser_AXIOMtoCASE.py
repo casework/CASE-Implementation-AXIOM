@@ -320,7 +320,8 @@ class ExtractTraces(xml.sax.ContentHandler):
 			'Android Telegram Messages', 'iOS Telegram Messages', 'iOS Telegram Chats', 
 		    'Snapchat Chat Messages', 'TikTok Messages', 'Instagram Direct Messages',
 		    'Signal Messages', 'Signal Messages - Windows', 'Signal Messages - iOS', 
-		    'Facebook Messenger Messages', 'Discord Messages', 'LINE Messages', 'Skype Activity')
+		    'Facebook Messenger Messages', 'Discord Messages', 'LINE Messages', 'Skype Activity',
+			'Telegram Messages - Android', 'Telegram Messages - iOS')
 		self.CHATin = False
 		self.CHATinSender = False
 		self.CHATinReceiver = False
