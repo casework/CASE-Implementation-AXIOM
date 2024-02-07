@@ -50,7 +50,7 @@ All the XML reports have been processed to generate the corresponding CASE repre
 * Calendar
 * Call
 * Cell Tower (drafting)
-* Chat (Whatsapp, Skype, etc.)
+* Chat (Whatsapp, Skype, Telegram etc.)
 * Contact
 * Cookie
 * Email

@@ -1419,7 +1419,7 @@ class AXIOMtoJSON:
 		'''
 		if self.bundle is None:
 			self.bundle = Bundle()
-			observable_info=ObjectInfo(name="D.F. Expert", version="CASE 1.0.0", description="Extraction from XML report by MAGNET AXIOM PROCESS")
+			observable_info=ObjectInfo(name="D.F. Expert", version="CASE 1.3.0", description="Extraction from XML report by MAGNET AXIOM PROCESS")
 			self.bundle.append_to_uco_object(observable_info)
 			
 	def writeLastLine(self):
