@@ -1,3 +1,7 @@
 [submodule "case_builder"]
 	path = case_builder
 	url = ssh://git@ccilab.ucd.ie:2332/inspectr/case_builder.git
+[submodule "dependencies/CASE-Mapping-Python"]
+	path = dependencies/CASE-Mapping-Python
+	url = https://github.com/casework/CASE-Mapping-Python.git
+	branch = main
